@@ -1,65 +1,63 @@
-import Image from "next/image";
+import { CalculatorWizard } from "@/components/CalculatorWizard";
 
 export default function Home() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
+    <main>
+      <section
+        className="relative overflow-hidden px-4 py-14 sm:px-6 sm:py-20"
+        style={{
+          background: `linear-gradient(135deg, var(--color-navy) 0%, var(--color-medium-blue) 55%, var(--color-light-blue) 100%)`,
+        }}
+      >
+        <div className="relative mx-auto max-w-4xl text-center text-white">
+          <p className="text-sm font-semibold tracking-wide text-[var(--color-light-blue)] uppercase">
+            Storm Sprinklers · Utah
+          </p>
+          <h1 className="font-display mt-3 text-3xl leading-tight sm:text-4xl md:text-5xl">
+            Sprinkler Runtime &amp; Program Calculator
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+          <p className="mx-auto mt-4 max-w-2xl text-base text-white/90 sm:text-lg">
+            Enter your lawn and system details to get zone runtimes and a weekly
+            program tailored to your city&apos;s watering rules, drought stage,
+            shade, slope, soil, and plants.
+          </p>
+          <p className="mt-3 text-sm font-medium">
+            Fast <span className="text-[var(--color-pink)]">|</span> Honest{" "}
+            <span className="text-[var(--color-pink)]">|</span> Reliable
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+      </section>
+
+      <section className="mx-auto max-w-3xl px-4 py-10 sm:px-6 sm:py-14">
+        <CalculatorWizard />
+      </section>
+
+      <section className="mx-auto max-w-4xl px-4 pb-16 sm:px-6">
+        <div className="grid gap-6 sm:grid-cols-3">
+          {[
+            {
+              title: "Local rules",
+              text: "Select your Utah or Salt Lake County city for typical allowed watering days.",
+            },
+            {
+              title: "Your landscape",
+              text: "Shade, slope, soil, vegetation, and head type all adjust how long each zone should run.",
+            },
+            {
+              title: "Smarter watering",
+              text: "Cycle-soak on slopes, efficiency fixes, and drought reductions built into every recommendation.",
+            },
+          ].map((card) => (
+            <div
+              key={card.title}
+              className="rounded-xl border border-[var(--color-light-blue)] bg-white p-5 shadow-sm"
+            >
+              <h3 className="font-display text-[var(--color-navy)]">{card.title}</h3>
+              <p className="mt-2 text-sm text-[var(--color-navy)]/75">{card.text}</p>
+            </div>
+          ))}
         </div>
-      </main>
-    </div>
+      </section>
+    </main>
   );
 }
