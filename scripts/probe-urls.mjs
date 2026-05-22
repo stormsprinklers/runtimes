@@ -1,0 +1,67 @@
+const candidates = [
+  ["provo", "https://www.provo.gov/360/Water"],
+  ["provo", "https://www.provo.gov/departments/power-water"],
+  ["orem", "https://www.orem.gov/351/Water"],
+  ["orem", "https://www.orem.gov/102/Water-Conservation"],
+  ["vineyard", "https://www.vineyardutah.gov/"],
+  ["vineyard", "https://www.vineyardutah.gov/27/Government"],
+  ["american-fork", "https://www.americafork.gov/"],
+  ["american-fork", "https://www.americafork.gov/198/Water-Conservation"],
+  ["american-fork", "https://www.afcity.org/"],
+  ["pleasant-grove", "https://www.plgcity.org/"],
+  ["pleasant-grove", "https://www.plgcity.org/175/Pressurized-Irrigation"],
+  ["pleasant-grove", "https://pleasantgrove.org/"],
+  ["alpine", "https://www.alpineut.gov/196/Water-Conservation"],
+  ["cedar-hills", "https://www.cedarhills.org/"],
+  ["cedar-hills", "https://www.cedarhills.org/community/page/water-conservation"],
+  ["saratoga-springs", "https://www.saratogasprings-ut.gov/"],
+  ["saratoga-springs", "https://www.saratogasprings-ut.gov/departments/public-works/water"],
+  ["eagle-mountain", "https://www.eaglemountaincity.com/"],
+  ["eagle-mountain", "https://www.eaglemountain.gov/"],
+  ["spanish-fork", "https://www.spanishfork.gov/"],
+  ["spanish-fork", "https://www.spanishfork.org/departments/public-works"],
+  ["springville", "https://www.springville.org/"],
+  ["springville", "https://www.springvillecity.org/"],
+  ["mapleton", "https://www.mapleton.org/"],
+  ["mapleton", "https://www.mapleton.org/departments/public-works"],
+  ["payson", "https://www.payson.org/"],
+  ["payson", "https://www.paysonutah.org/"],
+  ["santaquin", "https://www.santaquin.gov/"],
+  ["slc", "https://www.slc.gov/utilities/conservation/drought-information/"],
+  ["slc", "https://www.slc.gov/utilities/conservation/"],
+  ["ghid", "https://www.ghid.gov/"],
+  ["ghid", "https://www.ghidutah.gov/"],
+  ["draper", "https://www.draperutah.gov/"],
+  ["draper", "https://www.draperutah.gov/1120/Water-Conservation"],
+  ["herriman", "https://www.herriman.gov/"],
+  ["herriman", "https://www.herriman.gov/266/Water-Conservation"],
+  ["riverton", "https://www.rivertonutah.gov/"],
+  ["riverton", "https://www.rivertonutah.gov/departments/public-works/water"],
+  ["bluffdale", "https://www.bluffdale.gov/"],
+  ["bluffdale", "https://www.bluffdale.gov/departments/public-works/water-conservation"],
+  ["midvale", "https://www.midvale.utah.gov/"],
+  ["midvale", "https://www.midvalecity.gov/"],
+  ["murray", "https://www.murray.utah.gov/"],
+  ["murray", "https://www.murray.utah.gov/259/Water-Conservation"],
+  ["tbid", "https://www.tbidutah.gov/"],
+  ["tbid", "https://tbidutah.org/"],
+  ["south-salt-lake", "https://www.sslc.gov/"],
+  ["south-salt-lake", "https://www.southsaltlakecity.com/"],
+  ["magna", "https://www.magnawater.org/"],
+  ["magna", "https://www.magnawater.com/"],
+  ["kearns", "https://www.kearnsid.org/"],
+  ["salt-lake-county", "https://www.saltlakecounty.gov/public-works/water-conservation/"],
+  ["salt-lake-county", "https://slco.org/public-works/water-conservation/"],
+];
+
+for (const [city, url] of candidates) {
+  try {
+    const res = await fetch(url, {
+      redirect: "follow",
+      signal: AbortSignal.timeout(10000),
+    });
+    if (res.ok) console.log("OK", res.status, city, url);
+  } catch {
+    /* skip */
+  }
+}

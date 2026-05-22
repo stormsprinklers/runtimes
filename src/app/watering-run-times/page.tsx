@@ -1,5 +1,9 @@
 import type { Metadata } from "next";
 import { WateringCalculatorForm } from "@/components/watering/WateringCalculatorForm";
+import {
+  getCitiesByCounty,
+  SALT_LAKE_COUNTY_CITY_IDS,
+} from "@/data/wateringRestrictions";
 import { heroSectionClass, pageSectionClass } from "@/lib/ui";
 
 export const metadata: Metadata = {
@@ -16,6 +20,10 @@ export const metadata: Metadata = {
     siteName: "Storm Sprinklers",
   },
 };
+
+const saltLakeCityNames = SALT_LAKE_COUNTY_CITY_IDS.map(
+  (id) => getCitiesByCounty("salt-lake").find((c) => c.id === id)?.city,
+).filter(Boolean);
 
 export default function WateringRunTimesPage() {
   return (
@@ -41,6 +49,11 @@ export default function WateringRunTimesPage() {
       </section>
 
       <section className={pageSectionClass}>
+        <p className="mb-6 text-sm leading-relaxed text-[var(--color-navy)]/75">
+          <strong className="text-[var(--color-navy)]">Salt Lake County:</strong>{" "}
+          {saltLakeCityNames.join(", ")} — each with links to official city or
+          water-provider sources.
+        </p>
         <WateringCalculatorForm />
         <p className="mt-6 rounded-lg border border-[var(--color-light-blue)] bg-white/80 p-3 text-xs leading-relaxed text-[var(--color-navy)]/70 sm:mt-8 sm:p-4">
           <strong className="text-[var(--color-navy)]">Disclaimer:</strong> This

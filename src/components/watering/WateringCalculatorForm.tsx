@@ -47,8 +47,10 @@ export function WateringCalculatorForm() {
 
   function handleCountyChange(next: County) {
     setCounty(next);
-    const first = getCitiesByCounty(next)[0];
-    if (first) setCityId(first.id);
+    const list = getCitiesByCounty(next);
+    const defaultId = next === "salt-lake" ? "salt-lake-city" : "provo";
+    const pick = list.find((c) => c.id === defaultId) ?? list[0];
+    if (pick) setCityId(pick.id);
     setResult(null);
   }
 

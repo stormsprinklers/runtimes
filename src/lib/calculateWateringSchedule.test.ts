@@ -11,7 +11,11 @@ import {
   parseTimeToMinutes,
   resolveAllowedWateringDays,
 } from "@/lib/calculateWateringSchedule";
-import { getCityRule } from "@/data/wateringRestrictions";
+import {
+  getCitiesByCounty,
+  getCityRule,
+  SALT_LAKE_COUNTY_CITY_IDS,
+} from "@/data/wateringRestrictions";
 
 describe("seasonalWateringDays", () => {
   it("April has 0 base days", () => {
@@ -293,6 +297,31 @@ describe("calculateWateringSchedule (single-zone wrapper)", () => {
     });
     expect(result?.cycles).toBe(4);
     expect(result?.soakMinutes).toBe(45);
+  });
+});
+
+describe("Salt Lake County cities", () => {
+  it("includes all 18 primary cities with official source URLs", () => {
+    const slc = getCitiesByCounty("salt-lake");
+    const primary = slc.slice(0, SALT_LAKE_COUNTY_CITY_IDS.length);
+    expect(primary.map((c) => c.id)).toEqual([...SALT_LAKE_COUNTY_CITY_IDS]);
+    for (const city of primary) {
+      expect(city.sourceUrl).toMatch(/^https:\/\//);
+      expect(city.sourceLabel.length).toBeGreaterThan(0);
+      expect(city.county).toBe("salt-lake");
+    }
+  });
+
+  it("South Jordan caps at one day per week in summer", () => {
+    const rule = getCityRule("south-jordan")!;
+    const days = applyCityDayLimits(3, rule, new Date(2026, 5, 20));
+    expect(days).toBe(1);
+  });
+
+  it("Midvale recommends at most two days after May 15", () => {
+    const rule = getCityRule("midvale")!;
+    const days = applyCityDayLimits(3, rule, new Date(2026, 5, 20));
+    expect(days).toBe(2);
   });
 });
 

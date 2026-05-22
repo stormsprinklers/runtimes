@@ -1,0 +1,66 @@
+const candidates = [
+  ["american-fork", "https://www.americafork.gov/"],
+  ["american-fork", "https://americafork.gov/"],
+  ["american-fork", "https://www.americaforkcity.org/"],
+  ["american-fork", "https://www.afcity.org/"],
+  ["american-fork", "https://afcity.org/"],
+  ["pleasant-grove", "https://pleasantgrove.org/175/Pressurized-Irrigation"],
+  ["pleasant-grove", "https://pleasantgrove.org/departments/public-works/water"],
+  ["pleasant-grove", "https://www.plgcity.org/175/Pressurized-Irrigation"],
+  ["cedar-hills", "https://www.cedarhills.org/community/page/water-conservation"],
+  ["cedar-hills", "https://www.cedarhills.org/government/page/water"],
+  ["cedar-hills", "https://www.cedarhills.org/water"],
+  ["saratoga-springs", "https://www.saratogasprings-ut.gov/departments/public-works/water"],
+  ["saratoga-springs", "https://www.saratogasprings-ut.gov/departments/water"],
+  ["spanish-fork", "https://www.spanishfork.gov/departments/public-works/water-conservation"],
+  ["spanish-fork", "https://www.spanishfork.gov/162/Water-Conservation"],
+  ["springville", "https://www.springville.org/government/departments/public_works/water.php"],
+  ["springville", "https://www.springville.org/departments/public-works/water"],
+  ["mapleton", "https://www.mapleton.org/departments/public-works/pressurized-irrigation"],
+  ["mapleton", "https://www.mapleton.org/162/Pressurized-Irrigation"],
+  ["payson", "https://www.payson.org/"],
+  ["payson", "https://www.paysonutah.gov/"],
+  ["payson", "https://paysonutah.org/"],
+  ["draper", "https://www.draperutah.gov/1120/Water-Conservation"],
+  ["draper", "https://www.draperutah.gov/101/Water-Conservation"],
+  ["herriman", "https://www.herriman.gov/266/Water-Conservation"],
+  ["herriman", "https://www.herriman.gov/101/Water-Conservation"],
+  ["riverton", "https://www.rivertonutah.gov/departments/public-works/water"],
+  ["riverton", "https://www.rivertonutah.gov/101/Secondary-Water"],
+  ["bluffdale", "https://www.bluffdale.gov/101/Water-Conservation"],
+  ["bluffdale", "https://www.bluffdale.gov/departments/public-works/water-conservation"],
+  ["midvale", "https://www.midvale.utah.gov/departments/public-works/water"],
+  ["midvale", "https://www.midvale.utah.gov/101/Drought-Response"],
+  ["murray", "https://www.murray.utah.gov/259/Water-Conservation"],
+  ["murray", "https://www.murray.utah.gov/101/Water-Conservation"],
+  ["tbid", "https://www.tbidutah.gov/"],
+  ["tbid", "https://tbidutah.org/"],
+  ["tbid", "https://www.tbid.org/"],
+  ["ghid", "https://www.ghid.gov/196/Conservation"],
+  ["ghid", "https://www.ghid.gov/101/Conservation"],
+  ["ghid", "https://www.ghid.gov/water-conservation"],
+  ["south-salt-lake", "https://www.sslc.gov/departments/public-works/water"],
+  ["south-salt-lake", "https://www.sslc.gov/101/Water-Conservation"],
+  ["magna", "https://www.magnawater.com/"],
+  ["magna", "https://www.magnawaterdistrict.org/"],
+  ["eagle-mountain", "https://www.eaglemountain.gov/departments/utilities/water-conservation"],
+  ["eagle-mountain", "https://www.eaglemountaincity.com/departments/utilities/water-conservation"],
+  ["vineyard", "https://www.vineyardutah.gov/27/Government"],
+  ["vineyard", "https://www.vineyardutah.gov/101/Water-Conservation"],
+  ["salt-lake-county", "https://www.saltlakecounty.gov/public-works/water-conservation/"],
+  ["salt-lake-county", "https://www.slco.org/public-works/water-conservation/"],
+  ["holliday", "https://www.hollidaywater.com/"],
+  ["holliday", "https://www.hollidaywatercompany.com/"],
+];
+
+for (const [city, url] of candidates) {
+  try {
+    const res = await fetch(url, {
+      redirect: "follow",
+      signal: AbortSignal.timeout(10000),
+    });
+    if (res.ok) console.log("OK", city, res.url);
+  } catch (e) {
+    console.log("ERR", city, url, e.message?.slice(0, 40));
+  }
+}
