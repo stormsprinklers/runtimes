@@ -6,8 +6,8 @@ export const SEASONAL_WATERING_DAYS: Record<number, number> = {
   0: 0, // January
   1: 0, // February
   2: 0, // March
-  3: 0, // April
-  4: 1, // May
+  3: 1, // April — light irrigation as lawns green up
+  4: 2, // May
   5: 2, // June
   6: 3, // July
   7: 3, // August

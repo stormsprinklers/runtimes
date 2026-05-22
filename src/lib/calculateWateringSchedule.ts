@@ -125,7 +125,8 @@ export function applyCityDayLimits(
   }
 
   if (rule.subtractOneDayFromNormal && days > 0) {
-    days = Math.max(0, days - 1);
+    // e.g. SLC Stage 2: one day less than normal — keep at least 1 day in active season
+    days = Math.max(1, days - 1);
   }
 
   if (rule.maxDaysPerWeek !== undefined) {

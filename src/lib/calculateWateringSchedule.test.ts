@@ -18,8 +18,8 @@ import {
 } from "@/data/wateringRestrictions";
 
 describe("seasonalWateringDays", () => {
-  it("April has 0 base days", () => {
-    expect(getBaseDaysPerWeek(3)).toBe(0);
+  it("April has 1 base day", () => {
+    expect(getBaseDaysPerWeek(3)).toBe(1);
   });
 
   it("July has 3 base days", () => {
@@ -32,6 +32,12 @@ describe("applyCityDayLimits", () => {
     const rule = getCityRule("salt-lake-city")!;
     const days = applyCityDayLimits(3, rule, new Date(2026, 6, 15));
     expect(days).toBe(2);
+  });
+
+  it("SLC keeps at least one watering day in May", () => {
+    const rule = getCityRule("salt-lake-city")!;
+    const days = applyCityDayLimits(2, rule, new Date(2026, 4, 20));
+    expect(days).toBe(1);
   });
 
   it("American Fork returns 0 before May 1", () => {
@@ -310,6 +316,24 @@ describe("Salt Lake County cities", () => {
       expect(city.sourceLabel.length).toBeGreaterThan(0);
       expect(city.county).toBe("salt-lake");
     }
+  });
+
+  it("Salt Lake City returns watering days and zone runtimes in May", () => {
+    const result = calculateControllerSchedule({
+      site: {
+        county: "salt-lake",
+        cityId: "salt-lake-city",
+        addressParity: "unknown",
+        month: 4,
+        referenceDate: new Date(2026, 4, 20),
+      },
+      stations: [createDefaultStation(0)],
+    });
+    expect(result?.cityDaysPerWeek).toBeGreaterThan(0);
+    const programA = result?.programs.find((p) => p.programId === "A");
+    expect(programA?.scheduleLabel).not.toContain("No outdoor watering");
+    expect(programA?.stations[0]?.totalMinutes).toBeGreaterThan(0);
+    expect(programA?.startTimes.length).toBeGreaterThan(0);
   });
 
   it("South Jordan caps at one day per week in summer", () => {

@@ -78,6 +78,7 @@ export function WateringCalculatorForm() {
         cityId,
         addressParity,
         month,
+        referenceDate: new Date(new Date().getFullYear(), month, 15),
       },
       stations,
     });

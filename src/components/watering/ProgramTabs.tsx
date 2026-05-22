@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { formatZoneRuntimeSummary } from "@/lib/zoneRuntimeDisplay";
 import type { ProgramSchedule } from "@/types/watering-calculator";
 import { ALL_PROGRAM_IDS } from "@/types/watering-calculator";
 
@@ -22,18 +23,36 @@ function ProgramPanel({ program }: { program: ProgramSchedule }) {
         <>
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-navy)]/55">
-              Zones in this program
+              Zone run times
             </p>
-            <ul className="mt-2 space-y-1.5">
-              {program.zoneNames.map((zone) => (
+            <ul className="mt-2 space-y-2.5">
+              {program.stations.map((station) => (
                 <li
-                  key={zone}
-                  className="text-sm font-medium text-[var(--color-navy)]"
+                  key={station.stationId}
+                  className="rounded-lg bg-[var(--color-light-grey)]/80 px-3 py-2.5"
                 >
-                  {zone}
+                  <p className="text-sm font-semibold text-[var(--color-navy)]">
+                    {station.displayName}
+                  </p>
+                  <p className="mt-0.5 font-mono text-sm font-bold text-[var(--color-medium-blue)]">
+                    {formatZoneRuntimeSummary(station)}
+                  </p>
+                  {station.cycles > 1 &&
+                    station.cycleSoakMethod === "multiple-start-times" && (
+                      <p className="mt-1 text-xs text-[var(--color-navy)]/65">
+                        Use {station.cycles} start times below (same minutes
+                        each run).
+                      </p>
+                    )}
                 </li>
               ))}
             </ul>
+            {program.totalRunMinutes > 0 && (
+              <p className="mt-2 text-xs text-[var(--color-navy)]/65">
+                ~{program.totalRunMinutes} min to run all zones in this program
+                once per start time.
+              </p>
+            )}
           </div>
 
           <div>

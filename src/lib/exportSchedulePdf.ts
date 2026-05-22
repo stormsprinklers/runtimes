@@ -1,4 +1,5 @@
 import { brand } from "@/lib/brand";
+import { formatZoneRuntimeSummary } from "@/lib/zoneRuntimeDisplay";
 import type {
   ControllerCalculatorResult,
   ProgramSchedule,
@@ -25,20 +26,54 @@ function hexToRgb(hex: string): [number, number, number] {
   ];
 }
 
-async function loadLogoDataUrl(): Promise<string | null> {
+interface LogoAsset {
+  dataUrl: string;
+  width: number;
+  height: number;
+}
+
+async function loadLogoAsset(): Promise<LogoAsset | null> {
   try {
     const res = await fetch("/logo.png");
     if (!res.ok) return null;
     const blob = await res.blob();
-    return await new Promise((resolve) => {
+    const dataUrl = await new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(reader.result as string);
-      reader.onerror = () => resolve(null);
+      reader.onerror = () => reject(reader.error);
       reader.readAsDataURL(blob);
     });
+    const dimensions = await new Promise<{ width: number; height: number }>(
+      (resolve, reject) => {
+        const img = new Image();
+        img.onload = () =>
+          resolve({ width: img.naturalWidth, height: img.naturalHeight });
+        img.onerror = () => reject(new Error("logo decode failed"));
+        img.src = dataUrl;
+      },
+    );
+    if (dimensions.width <= 0 || dimensions.height <= 0) return null;
+    return { dataUrl, ...dimensions };
   } catch {
     return null;
   }
+}
+
+/** Fit logo in footer box without stretching (mm). */
+function footerLogoSize(
+  naturalWidth: number,
+  naturalHeight: number,
+  maxWidth: number,
+  maxHeight: number,
+): { width: number; height: number } {
+  const aspect = naturalWidth / naturalHeight;
+  let height = maxHeight;
+  let width = height * aspect;
+  if (width > maxWidth) {
+    width = maxWidth;
+    height = width / aspect;
+  }
+  return { width, height };
 }
 
 function drawPageHeader(doc: jsPDF, title: string) {
@@ -61,7 +96,12 @@ function drawPageHeader(doc: jsPDF, title: string) {
   doc.text(title, PAGE_WIDTH - MARGIN - titleWidth, 14);
 }
 
-function drawFooter(doc: jsPDF, page: number, pageCount: number, logoDataUrl: string | null) {
+function drawFooter(
+  doc: jsPDF,
+  page: number,
+  pageCount: number,
+  logo: LogoAsset | null,
+) {
   const y = 297 - FOOTER_HEIGHT;
   doc.setFillColor(...lightBlue);
   doc.rect(0, y, PAGE_WIDTH, FOOTER_HEIGHT, "F");
@@ -69,7 +109,21 @@ function drawFooter(doc: jsPDF, page: number, pageCount: number, logoDataUrl: st
   doc.setLineWidth(0.3);
   doc.line(MARGIN, y, PAGE_WIDTH - MARGIN, y);
 
-  const textX = logoDataUrl ? MARGIN + 32 : MARGIN;
+  const LOGO_MAX_HEIGHT = 28;
+  const LOGO_MAX_WIDTH = 40;
+  const logoGap = 4;
+  let logoBlockWidth = 0;
+  if (logo) {
+    const size = footerLogoSize(
+      logo.width,
+      logo.height,
+      LOGO_MAX_WIDTH,
+      LOGO_MAX_HEIGHT,
+    );
+    logoBlockWidth = size.width + logoGap;
+  }
+
+  const textX = logo ? MARGIN + logoBlockWidth : MARGIN;
   doc.setTextColor(...navy);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
@@ -88,9 +142,16 @@ function drawFooter(doc: jsPDF, page: number, pageCount: number, logoDataUrl: st
     y + 35,
   );
 
-  if (logoDataUrl) {
+  if (logo) {
     try {
-      doc.addImage(logoDataUrl, "PNG", MARGIN, y + 5, 26, 26);
+      const size = footerLogoSize(
+        logo.width,
+        logo.height,
+        LOGO_MAX_WIDTH,
+        LOGO_MAX_HEIGHT,
+      );
+      const logoY = y + (FOOTER_HEIGHT - size.height) / 2;
+      doc.addImage(logo.dataUrl, "PNG", MARGIN, logoY, size.width, size.height);
     } catch {
       /* logo format unsupported */
     }
@@ -146,7 +207,14 @@ function programBlock(doc: jsPDF, program: ProgramSchedule, startY: number): num
   let y = ensureSpace(doc, startY, 20);
   y = sectionTitle(doc, y, program.label);
 
-  y = bodyText(doc, y, [`Zones: ${program.zoneNames.join("; ")}`], 9);
+  for (const station of program.stations) {
+    y = bodyText(
+      doc,
+      y,
+      [`${station.displayName}: ${formatZoneRuntimeSummary(station)}`],
+      9,
+    );
+  }
   y = bodyText(doc, y, [`Watering days: ${program.scheduleLabel}`], 9);
   y = bodyText(
     doc,
@@ -184,7 +252,7 @@ function bulletList(doc: jsPDF, title: string, items: string[], startY: number):
 export async function exportSchedulePdf(
   result: ControllerCalculatorResult,
 ): Promise<void> {
-  const logoDataUrl = await loadLogoDataUrl();
+  const logo = await loadLogoAsset();
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const generated = new Date().toLocaleDateString("en-US", {
     year: "numeric",
@@ -248,7 +316,7 @@ export async function exportSchedulePdf(
   for (let p = 1; p <= pageCount; p++) {
     doc.setPage(p);
     if (p > 1) drawPageHeader(doc, "Watering schedule (continued)");
-    drawFooter(doc, p, pageCount, logoDataUrl);
+    drawFooter(doc, p, pageCount, logo);
   }
 
   const slug = result.cityName
