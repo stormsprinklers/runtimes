@@ -37,13 +37,18 @@ function ProgramPanel({ program }: { program: ProgramSchedule }) {
                   <p className="mt-0.5 font-mono text-sm font-bold text-[var(--color-medium-blue)]">
                     {formatZoneRuntimeSummary(station)}
                   </p>
-                  {station.cycles > 1 &&
-                    station.cycleSoakMethod === "multiple-start-times" && (
+                  {program.startTimeCount > 1 ? (
                       <p className="mt-1 text-xs text-[var(--color-navy)]/65">
-                        Use {station.cycles} start times below (same minutes
-                        each run).
+                        {program.daysPerWeek > 1
+                          ? `On each watering day, run these ${program.startTimeCount} start times (cycle-and-soak).`
+                          : `Use all ${program.startTimeCount} start times on your watering day.`}
                       </p>
-                    )}
+                    ) : program.daysPerWeek > 1 ? (
+                      <p className="mt-1 text-xs text-[var(--color-navy)]/65">
+                        One start time per watering day — repeat on each day in
+                        your schedule.
+                      </p>
+                    ) : null}
                 </li>
               ))}
             </ul>

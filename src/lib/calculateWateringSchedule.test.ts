@@ -199,6 +199,61 @@ describe("calculateControllerSchedule", () => {
     expect(program?.startTimeCount).toBe(1);
   });
 
+  it("program start time count always matches each zone cycle count", () => {
+    const result = calculateControllerSchedule({
+      site: {
+        county: "utah",
+        cityId: "provo",
+        addressParity: "unknown",
+        month: 6,
+        referenceDate: julyDate,
+      },
+      stations: [createDefaultStation(0)],
+    });
+    const program = result?.programs.find((p) => p.programId === "A")!;
+    expect(program.startTimeCount).toBe(program.startTimes.length);
+    for (const station of program.stations) {
+      expect(station.cycles).toBe(program.startTimeCount);
+    }
+  });
+
+  it("default spray lawn uses one start time per day across multiple watering days", () => {
+    const result = calculateControllerSchedule({
+      site: {
+        county: "utah",
+        cityId: "provo",
+        addressParity: "unknown",
+        month: 6,
+        referenceDate: julyDate,
+      },
+      stations: [createDefaultStation(0)],
+    });
+    const program = result?.programs.find((p) => p.programId === "A")!;
+    expect(program.daysPerWeek).toBeGreaterThanOrEqual(2);
+    expect(program.startTimeCount).toBe(1);
+    expect(program.stations[0].cycles).toBe(1);
+    expect(program.stations[0].totalMinutes).toBeGreaterThan(0);
+    expect(result?.notes.some((n) => n.includes("once per watering day"))).toBe(
+      true,
+    );
+  });
+
+  it("once-per-week cap uses multiple start times on the single watering day", () => {
+    const result = calculateControllerSchedule({
+      site: {
+        county: "salt-lake",
+        cityId: "south-jordan",
+        addressParity: "unknown",
+        month: 5,
+        referenceDate: new Date(2026, 5, 20),
+      },
+      stations: [createDefaultStation(0)],
+    });
+    const program = result?.programs.find((p) => p.programId === "A")!;
+    expect(program.daysPerWeek).toBe(1);
+    expect(program.startTimeCount).toBeGreaterThan(1);
+  });
+
   it("spaces cycle-soak start times by full program pass", () => {
     const result = calculateControllerSchedule({
       site: {
@@ -288,21 +343,28 @@ describe("calculateControllerSchedule", () => {
 });
 
 describe("calculateWateringSchedule (single-zone wrapper)", () => {
-  it("clay + steep grass adds cycle-soak cycles", () => {
-    const result = calculateWateringSchedule({
-      county: "utah",
-      cityId: "provo",
-      addressParity: "unknown",
-      sprinklerType: "spray",
-      lawnType: "established-lawn",
-      sunExposure: "mixed",
-      soilType: "clay",
-      slope: "steep",
-      month: 6,
-      referenceDate: new Date(2026, 6, 15),
+  it("clay + steep grass adds cycle-soak cycles matching start times", () => {
+    const result = calculateControllerSchedule({
+      site: {
+        county: "utah",
+        cityId: "provo",
+        addressParity: "unknown",
+        month: 6,
+        referenceDate: new Date(2026, 6, 15),
+      },
+      stations: [
+        {
+          ...createDefaultStation(0),
+          soilType: "clay",
+          slope: "steep",
+        },
+      ],
     });
-    expect(result?.cycles).toBe(4);
-    expect(result?.soakMinutes).toBe(45);
+    const program = result?.programs.find((p) => p.programId === "A")!;
+    expect(program.startTimeCount).toBe(3);
+    expect(program.stations[0].cycles).toBe(3);
+    expect(program.daysPerWeek).toBeGreaterThanOrEqual(2);
+    expect(program.stations[0].soakMinutes).toBe(45);
   });
 });
 

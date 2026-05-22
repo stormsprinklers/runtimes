@@ -281,7 +281,8 @@ export function calculateStationRuntime(
   const slopeMult = SLOPE_MULTIPLIERS[station.slope];
 
   let baseMinutes = baseRuntime.minutesPerWatering;
-  let cycles = baseRuntime.cycles;
+  /** Per watering day — not stacked onto one day unless regulations require it. */
+  let cycles = 1;
   let soakMinutes = 0;
 
   if (station.lawnType === "trees") {
@@ -303,7 +304,7 @@ export function calculateStationRuntime(
       station.slope === "steep");
 
   if (needsCycleSoak) {
-    cycles += 1;
+    cycles = Math.max(3, Math.ceil(adjustedTotal / 8));
     soakMinutes = 45;
   }
 
@@ -343,33 +344,103 @@ function onePassMinutes(stations: StationSchedule[]): number {
   return stations.reduce((sum, s) => sum + s.minutesPerCycle, 0);
 }
 
+/** Regulations force all weekly irrigation onto one (or zero) watering days. */
+export function isWateringDayConstrained(
+  rule: CityWateringRule,
+  cityDays: number,
+  programId: ProgramId,
+): boolean {
+  if (programId !== "A") return false;
+  if (rule.oncePerWeekCap) return true;
+  return getProgramDaysPerWeek(programId, cityDays) <= 1;
+}
+
+/**
+ * Start times per watering day. Prefer one run per allowed day; use multiple
+ * starts on the same day only when the city caps days or soil needs cycle-soak.
+ */
+export function resolveStartTimeCount(
+  stations: StationSchedule[],
+  programId: ProgramId,
+  daysPerWeek: number,
+  rule: CityWateringRule,
+  cityDays: number,
+): number {
+  const maxCycles = Math.max(...stations.map((s) => s.cycles), 1);
+  const maxTotal = Math.max(...stations.map((s) => s.totalMinutes), 0);
+  const constrained =
+    isWateringDayConstrained(rule, cityDays, programId) || daysPerWeek <= 1;
+
+  if (constrained && programId === "A") {
+    const packed = Math.max(3, Math.ceil(maxTotal / 8));
+    return Math.max(maxCycles, Math.min(4, packed));
+  }
+  if (constrained) return maxCycles;
+
+  const perDayCycleSoak = stations.some((s) => s.soakMinutes > 0);
+  if (perDayCycleSoak) return maxCycles;
+  return 1;
+}
+
+/** One controller start time per irrigation cycle on each watering day. */
 function buildStartTimesForProgram(
   startMinute: number,
   stations: StationSchedule[],
-  usesCycleSoak: boolean,
+  startTimeCount: number,
 ): { startTimes: string[]; endMinute: number } {
   const passMin = onePassMinutes(stations);
-  if (passMin <= 0) {
-    return { startTimes: [formatMinutesToTime(startMinute)], endMinute: startMinute };
+  const cycleCount = Math.max(1, startTimeCount);
+
+  if (passMin <= 0 || cycleCount <= 1) {
+    return {
+      startTimes: [formatMinutesToTime(startMinute)],
+      endMinute: startMinute + (passMin > 0 ? passMin + START_BUFFER_MIN : 0),
+    };
   }
 
-  const maxCycles = Math.max(...stations.map((s) => s.cycles), 1);
-  const useMultipleStarts = usesCycleSoak && maxCycles > 1;
+  const soakBetween = Math.max(...stations.map((s) => s.soakMinutes), 0);
+  const gapBetweenStarts = soakBetween > 0 ? soakBetween : START_BUFFER_MIN;
+
   const startTimes: string[] = [];
   let cursor = startMinute;
-
-  if (useMultipleStarts) {
-    const cycleCount = Math.min(maxCycles, 3);
-    for (let i = 0; i < cycleCount; i++) {
-      startTimes.push(formatMinutesToTime(cursor));
-      cursor += passMin + START_BUFFER_MIN;
-    }
-  } else {
+  for (let i = 0; i < cycleCount; i++) {
     startTimes.push(formatMinutesToTime(cursor));
-    cursor += passMin + START_BUFFER_MIN;
+    cursor += passMin + gapBetweenStarts;
   }
 
   return { startTimes, endMinute: cursor };
+}
+
+/** Zone cycle counts and per-cycle minutes match scheduled start times. */
+function syncProgramCyclesWithStartTimes(
+  program: ProgramSchedule,
+  rule: CityWateringRule,
+  cityDays: number,
+): void {
+  const n = program.startTimes.length;
+  program.startTimeCount = n;
+  program.usesCycleSoak = n > 1;
+
+  for (const station of program.stations) {
+    station.cycles = n;
+    station.minutesPerCycle = Math.max(1, Math.ceil(station.totalMinutes / n));
+    station.cycleSoakMethod = n > 1 ? "multiple-start-times" : "built-in";
+  }
+
+  if (n <= 1 || program.programId !== "A") {
+    program.cycleSoakNote = undefined;
+    return;
+  }
+
+  const rep = program.stations[0];
+  const passMin = onePassMinutes(program.stations);
+  const constrained = isWateringDayConstrained(rule, cityDays, program.programId);
+
+  if (constrained) {
+    program.cycleSoakNote = `Local rules allow about ${program.daysPerWeek} watering day${program.daysPerWeek !== 1 ? "s" : ""} per week — use ${n} start times on that day (${rep.minutesPerCycle} min per zone each run, ~${passMin} min per pass) so total runtime stays accurate.`;
+  } else {
+    program.cycleSoakNote = `On each watering day (${program.scheduleLabel}), use ${n} start times for cycle-and-soak (${rep.minutesPerCycle} min per zone per run, ~${passMin} min per pass). Watering days are spread across the week instead of stacking runs on one day.`;
+  }
 }
 
 export function resolveProgramWateringSchedule(
@@ -476,6 +547,8 @@ export function resolveProgramWateringSchedule(
 
 function scheduleProgramStartTimes(
   programs: ProgramSchedule[],
+  rule: CityWateringRule,
+  cityDays: number,
 ): void {
   let eveningCursor = EVENING_START_MIN;
 
@@ -484,28 +557,42 @@ function scheduleProgramStartTimes(
     const program = programs.find((p) => p.programId === programId);
     if (!program?.stations.length) continue;
 
+    const startTimeCount = resolveStartTimeCount(
+      program.stations,
+      programId,
+      program.daysPerWeek,
+      rule,
+      cityDays,
+    );
     const { startTimes, endMinute } = buildStartTimesForProgram(
       eveningCursor,
       program.stations,
-      program.usesCycleSoak,
+      startTimeCount,
     );
     program.startTimes = startTimes;
-    program.startTimeCount = startTimes.length;
     program.primaryStartTime = startTimes[0];
+    syncProgramCyclesWithStartTimes(program, rule, cityDays);
     eveningCursor = endMinute;
   }
 
   const grass = programs.find((p) => p.programId === "A");
   if (grass?.stations.length) {
     const grassStart = Math.max(eveningCursor, GRASS_START_MIN);
+    const startTimeCount = resolveStartTimeCount(
+      grass.stations,
+      "A",
+      grass.daysPerWeek,
+      rule,
+      cityDays,
+    );
     const { startTimes } = buildStartTimesForProgram(
       grassStart,
       grass.stations,
-      grass.usesCycleSoak,
+      startTimeCount,
     );
     grass.startTimes = startTimes;
-    grass.startTimeCount = startTimes.length;
     grass.primaryStartTime = startTimes[0];
+    syncProgramCyclesWithStartTimes(grass, rule, cityDays);
   }
 }
 
@@ -734,16 +821,6 @@ export function calculateControllerSchedule(
       site.addressParity,
     );
 
-    const usesCycleSoak = programStations.some(
-      (s) => s.cycles > 1 && s.soakMinutes > 0,
-    );
-
-    let cycleSoakNote: string | undefined;
-    if (usesCycleSoak && programId === "A") {
-      const rep = programStations.find((s) => s.cycles > 1) ?? programStations[0];
-      cycleSoakNote = `Cycle-and-soak for grass: ${rep.cycles} start times, ${rep.minutesPerCycle} min per zone each run (about ${onePassMinutes(programStations)} min per full program pass).`;
-    }
-
     return {
       programId,
       label: `${PROGRAM_SHORT_LABELS[programId]} — ${PROGRAM_DESCRIPTIONS[programId]}`,
@@ -762,15 +839,27 @@ export function calculateControllerSchedule(
         (sum, s) => sum + s.totalMinutes,
         0,
       ),
-      usesCycleSoak,
-      cycleSoakNote,
+      usesCycleSoak: false,
+      cycleSoakNote: undefined,
     };
   });
 
-  scheduleProgramStartTimes(programs);
+  scheduleProgramStartTimes(programs, rule, cityDays);
 
   const hydrozoneWarnings = detectHydrozoneIssues(stations, programs);
   const { warnings, notes } = buildCityWarningsAndNotes(rule, cityDays);
+
+  const grassProgram = programs.find((p) => p.programId === "A");
+  if (
+    grassProgram &&
+    grassProgram.daysPerWeek >= 2 &&
+    grassProgram.startTimeCount === 1 &&
+    grassProgram.stations.length
+  ) {
+    notes.push(
+      `Program A runs once per watering day across ${grassProgram.daysPerWeek} day${grassProgram.daysPerWeek !== 1 ? "s" : ""} per week (${grassProgram.scheduleLabel}) — usually better than multiple runs on a single day.`,
+    );
+  }
 
   if (programs.some((p) => p.programId === "C" && p.stations.length)) {
     notes.push(

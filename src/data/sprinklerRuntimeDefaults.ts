@@ -13,21 +13,21 @@ export const SPRINKLER_RUNTIME_DEFAULTS: Record<
 > = {
   spray: {
     minutesPerWatering: 24,
-    cycles: 3,
-    minutesPerCycle: 8,
-    soakMinutes: 30,
+    cycles: 1,
+    minutesPerCycle: 24,
+    soakMinutes: 0,
   },
   rotor: {
     minutesPerWatering: 45,
-    cycles: 3,
-    minutesPerCycle: 15,
-    soakMinutes: 30,
+    cycles: 1,
+    minutesPerCycle: 45,
+    soakMinutes: 0,
   },
   "mp-rotator": {
     minutesPerWatering: 60,
-    cycles: 3,
-    minutesPerCycle: 20,
-    soakMinutes: 30,
+    cycles: 1,
+    minutesPerCycle: 60,
+    soakMinutes: 0,
   },
   drip: {
     minutesPerWatering: 45,
