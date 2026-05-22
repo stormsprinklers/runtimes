@@ -46,7 +46,7 @@ export function RestrictionBadge({
   const s = styles[status];
   return (
     <span
-      className="inline-flex items-center rounded-full border px-3 py-1 text-xs font-bold text-[var(--color-navy)]"
+      className="inline-flex max-w-full items-center rounded-full border px-3 py-1.5 text-xs font-bold leading-snug text-[var(--color-navy)]"
       style={{ borderColor: s.border, background: s.bg }}
     >
       {label ?? s.label}

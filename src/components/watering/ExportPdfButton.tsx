@@ -1,6 +1,7 @@
 "use client";
 
 import { exportSchedulePdf } from "@/lib/exportSchedulePdf";
+import { btnSecondaryClass } from "@/lib/ui";
 import type { ControllerCalculatorResult } from "@/types/watering-calculator";
 import { useCallback, useState } from "react";
 
@@ -25,14 +26,14 @@ export function ExportPdfButton({ result }: ExportPdfButtonProps) {
   }, [result]);
 
   return (
-    <div className="inline-flex flex-col items-start gap-1">
+    <div className="flex w-full flex-col gap-1 sm:w-auto">
       <button
         type="button"
         onClick={handleExport}
         disabled={loading}
-        className="inline-flex items-center gap-2 rounded-full border-2 border-[var(--color-navy)] bg-white px-6 py-2.5 font-semibold text-[var(--color-navy)] transition hover:bg-[var(--color-light-grey)] disabled:cursor-wait disabled:opacity-60"
+        className={`${btnSecondaryClass} border-[var(--color-navy)] hover:bg-[var(--color-light-grey)] disabled:cursor-wait disabled:opacity-60`}
       >
-        <PdfIcon className="h-4 w-4 shrink-0" aria-hidden />
+        <PdfIcon className="h-5 w-5 shrink-0" aria-hidden />
         {loading ? "Creating PDF…" : "Download PDF"}
       </button>
       {error && (

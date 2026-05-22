@@ -16,6 +16,12 @@ const body = Source_Sans_3({
   variable: "--font-body",
 });
 
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover" as const,
+};
+
 export const metadata: Metadata = {
   title: "Storm Sprinklers Utah | Sprinkler Repair & Watering Tools",
   description:

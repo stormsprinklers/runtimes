@@ -34,7 +34,7 @@ export function CityRestrictionPanel({ cityId }: CityRestrictionPanelProps) {
         href={city.sourceUrl}
         target="_blank"
         rel="noopener noreferrer"
-        className="mt-1 inline-block font-semibold text-[var(--color-medium-blue)] underline"
+        className="break-anywhere mt-1 inline-block py-1 font-semibold text-[var(--color-medium-blue)] underline"
       >
         {city.sourceLabel} →
       </a>
@@ -43,7 +43,7 @@ export function CityRestrictionPanel({ cityId }: CityRestrictionPanelProps) {
           href={UTAH_WEEKLY_LAWN_GUIDE_URL}
           target="_blank"
           rel="noopener noreferrer"
-          className="mt-2 block font-semibold text-[var(--color-medium-blue)] underline"
+          className="break-anywhere mt-2 block py-1 font-semibold text-[var(--color-medium-blue)] underline"
         >
           Utah Weekly Lawn Watering Guide →
         </a>

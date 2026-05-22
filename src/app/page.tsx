@@ -1,41 +1,42 @@
 import Link from "next/link";
+import { btnPrimaryClass, heroSectionClass } from "@/lib/ui";
 
 export default function Home() {
   return (
     <main>
       <section
-        className="relative overflow-hidden px-4 py-16 sm:px-6 sm:py-24"
+        className={`${heroSectionClass} sm:py-20`}
         style={{
           background: `linear-gradient(135deg, var(--color-navy) 0%, var(--color-medium-blue) 55%, var(--color-light-blue) 100%)`,
         }}
       >
         <div className="relative mx-auto max-w-3xl text-center text-white">
-          <p className="text-sm font-semibold tracking-wide text-[var(--color-light-blue)] uppercase">
+          <p className="text-xs font-semibold tracking-wide text-[var(--color-light-blue)] uppercase sm:text-sm">
             Storm Sprinklers · Utah
           </p>
-          <h1 className="font-display mt-3 text-3xl leading-tight sm:text-4xl md:text-5xl">
+          <h1 className="font-display mt-2 text-2xl leading-tight sm:mt-3 sm:text-4xl md:text-5xl">
             Sprinkler Runtime &amp; Program Tools
           </h1>
-          <p className="mx-auto mt-4 max-w-2xl text-base text-white/90 sm:text-lg">
+          <p className="mx-auto mt-3 max-w-2xl text-sm leading-relaxed text-white/90 sm:mt-4 sm:text-lg">
             Free calculators for Utah County and Salt Lake County homeowners —
             built around local watering rules and your landscape.
           </p>
           <Link
             href="/watering-run-times"
-            className="mt-8 inline-block rounded-full px-8 py-3.5 text-base font-bold text-white transition hover:opacity-90"
+            className={`${btnPrimaryClass} mt-6 inline-flex sm:mt-8`}
             style={{ background: "var(--color-pink)" }}
           >
             Open Watering Run Time Calculator
           </Link>
-          <p className="mt-4 text-sm font-medium">
+          <p className="mt-3 text-xs font-medium sm:mt-4 sm:text-sm">
             Fast <span className="text-[var(--color-pink)]">|</span> Honest{" "}
             <span className="text-[var(--color-pink)]">|</span> Reliable
           </p>
         </div>
       </section>
 
-      <section className="mx-auto max-w-4xl px-4 py-14 sm:px-6">
-        <div className="grid gap-6 sm:grid-cols-3">
+      <section className="mx-auto max-w-4xl px-4 py-10 sm:px-6 sm:py-14">
+        <div className="grid gap-4 sm:grid-cols-3 sm:gap-6">
           {[
             {
               title: "Local rules",
@@ -52,10 +53,12 @@ export default function Home() {
           ].map((card) => (
             <div
               key={card.title}
-              className="rounded-xl border border-[var(--color-light-blue)] bg-white p-5 shadow-sm"
+              className="rounded-xl border border-[var(--color-light-blue)] bg-white p-4 shadow-sm sm:p-5"
             >
               <h2 className="font-display text-[var(--color-navy)]">{card.title}</h2>
-              <p className="mt-2 text-sm text-[var(--color-navy)]/75">{card.text}</p>
+              <p className="mt-2 text-sm leading-relaxed text-[var(--color-navy)]/75">
+                {card.text}
+              </p>
             </div>
           ))}
         </div>
