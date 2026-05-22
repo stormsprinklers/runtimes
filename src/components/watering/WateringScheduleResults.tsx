@@ -2,6 +2,7 @@
 
 import { bookNowUrl } from "@/lib/navigation";
 import type { ControllerCalculatorResult } from "@/types/watering-calculator";
+import { ExportPdfButton } from "./ExportPdfButton";
 import { ProgramScheduleCard } from "./ProgramScheduleCard";
 import { RestrictionBadge } from "./RestrictionBadge";
 import { RunTimeline } from "./RunTimeline";
@@ -118,7 +119,8 @@ export function WateringScheduleResults({
         </div>
       )}
 
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-wrap items-start gap-3">
+        <ExportPdfButton result={result} />
         <button
           type="button"
           onClick={onReset}
