@@ -1,6 +1,12 @@
 import { getBaseDaysPerWeek } from "@/data/seasonalWateringDays";
 import { SPRINKLER_RUNTIME_DEFAULTS } from "@/data/sprinklerRuntimeDefaults";
 import {
+  PROGRAM_DESCRIPTIONS,
+  PROGRAM_SHORT_LABELS,
+  PROGRAM_TAB_COLORS,
+} from "@/lib/programStyles";
+import { formatZoneDisplayName } from "@/lib/zoneDisplay";
+import {
   getCityRule,
   UTAH_WEEKLY_LAWN_GUIDE_URL,
   weekdayLabels,
@@ -20,11 +26,12 @@ import type {
   StationRuntimeCore,
   StationSchedule,
   SunExposure,
-  TimelineEntry,
   WateringCalculatorInput,
   WateringCalculatorResult,
+  WateringScheduleMode,
   Weekday,
 } from "@/types/watering-calculator";
+import { ALL_PROGRAM_IDS } from "@/types/watering-calculator";
 
 const ALL_WEEKDAYS: Weekday[] = [
   "monday",
@@ -36,13 +43,24 @@ const ALL_WEEKDAYS: Weekday[] = [
   "sunday",
 ];
 
-const PRIMARY_START = "5:00 AM";
+const EVENING_START_MIN = 19 * 60; // 7:00 PM
+const GRASS_START_MIN = 24 * 60 + 4 * 60; // 4:00 AM next calendar morning
+const START_BUFFER_MIN = 5;
 
-const PROGRAM_LABELS: Record<ProgramId, string> = {
-  A: "Program A — Lawn",
-  B: "Program B — Drip & landscape",
-  C: "Program C — New sod / seed",
+const BADGE_LABELS: Record<
+  ControllerCalculatorResult["badge"],
+  string
+> = {
+  "auto-update": "Active restriction",
+  "state-guide-fallback": "State guide fallback",
+  "provider-lookup": "Provider lookup required",
+  "manual-review": "Manual review",
+  "recommendation-only": "Recommendation only",
+  "provider-aware": "Provider-aware",
 };
+
+export const START_TIME_MISTAKE_NOTE =
+  "Each start time runs every zone in that program once, in order. Do not assign one start time per zone unless your controller manual calls for it.";
 
 const SUN_MULTIPLIERS: Record<SunExposure, number> = {
   "full-sun": 1.15,
@@ -62,21 +80,6 @@ const SLOPE_MULTIPLIERS: Record<Slope, number> = {
   moderate: 0.9,
   steep: 0.8,
 };
-
-const BADGE_LABELS: Record<
-  ControllerCalculatorResult["badge"],
-  string
-> = {
-  "auto-update": "Active restriction",
-  "state-guide-fallback": "State guide fallback",
-  "provider-lookup": "Provider lookup required",
-  "manual-review": "Manual review",
-  "recommendation-only": "Recommendation only",
-  "provider-aware": "Provider-aware",
-};
-
-export const START_TIME_MISTAKE_NOTE =
-  "Important: Each start time runs your entire program (all stations in order), not a single zone. Adding extra start times repeats the full program — a common mistake is assigning one start time per zone, which can triple your watering.";
 
 export function parseNoWaterBeforeDate(
   text: string,
@@ -226,12 +229,28 @@ export function resolveAllowedWateringDays(
   return pickSpacedFromWeek(useCount, !!rule.noConsecutiveDays);
 }
 
+function formatWeekdayList(days: Weekday[]): string {
+  return days.map((d) => weekdayLabels[d]).join(", ");
+}
+
+function isGrassSprinkler(station: StationInput): boolean {
+  return (
+    station.lawnType === "established-lawn" &&
+    (station.sprinklerType === "spray" ||
+      station.sprinklerType === "rotor" ||
+      station.sprinklerType === "mp-rotator")
+  );
+}
+
 export function assignProgram(station: StationInput): ProgramId {
   if (station.lawnType === "new-sod" || station.lawnType === "new-seed") {
     return "C";
   }
+  if (station.lawnType === "trees") {
+    return "D";
+  }
   if (
-    station.lawnType === "trees-shrubs" ||
+    station.lawnType === "shrubs" ||
     station.lawnType === "garden-beds" ||
     station.sprinklerType === "drip" ||
     station.sprinklerType === "bubbler"
@@ -248,6 +267,7 @@ export function getProgramDaysPerWeek(
   if (cityDays <= 0) return 0;
   if (programId === "A") return cityDays;
   if (programId === "B") return Math.max(1, Math.min(cityDays, 2));
+  if (programId === "D") return 1;
   return 7;
 }
 
@@ -259,17 +279,27 @@ export function calculateStationRuntime(
   const soilMult = SOIL_MULTIPLIERS[station.soilType];
   const slopeMult = SLOPE_MULTIPLIERS[station.slope];
 
+  let baseMinutes = baseRuntime.minutesPerWatering;
+  let cycles = baseRuntime.cycles;
+  let soakMinutes = 0;
+
+  if (station.lawnType === "trees") {
+    baseMinutes = 75;
+    cycles = 1;
+  } else if (station.lawnType === "shrubs" && station.sprinklerType === "drip") {
+    baseMinutes = 50;
+    cycles = 1;
+  }
+
   const adjustedTotal = Math.round(
-    baseRuntime.minutesPerWatering * sunMult * soilMult * slopeMult,
+    baseMinutes * sunMult * soilMult * slopeMult,
   );
 
-  let cycles = baseRuntime.cycles;
-  let soakMinutes = baseRuntime.soakMinutes;
-
   const needsCycleSoak =
-    station.soilType === "clay" ||
-    station.slope === "moderate" ||
-    station.slope === "steep";
+    isGrassSprinkler(station) &&
+    (station.soilType === "clay" ||
+      station.slope === "moderate" ||
+      station.slope === "steep");
 
   if (needsCycleSoak) {
     cycles += 1;
@@ -287,7 +317,7 @@ export function calculateStationRuntime(
   };
 }
 
-function parseTimeToMinutes(time: string): number {
+export function parseTimeToMinutes(time: string): number {
   const match = time.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
   if (!match) return 5 * 60;
   let hours = parseInt(match[1], 10);
@@ -298,7 +328,7 @@ function parseTimeToMinutes(time: string): number {
   return hours * 60 + minutes;
 }
 
-function formatMinutesToTime(totalMinutes: number): string {
+export function formatMinutesToTime(totalMinutes: number): string {
   const wrapped = ((totalMinutes % (24 * 60)) + 24 * 60) % (24 * 60);
   let hours = Math.floor(wrapped / 60);
   const mins = wrapped % 60;
@@ -308,79 +338,196 @@ function formatMinutesToTime(totalMinutes: number): string {
   return `${hours}:${mins.toString().padStart(2, "0")} ${period}`;
 }
 
-export function buildProgramStartTimes(
-  programUsesCycleSoak: boolean,
-  maxCycles: number,
-  soakMinutes: number,
+function onePassMinutes(stations: StationSchedule[]): number {
+  return stations.reduce((sum, s) => sum + s.minutesPerCycle, 0);
+}
+
+function buildStartTimesForProgram(
+  startMinute: number,
+  stations: StationSchedule[],
+  usesCycleSoak: boolean,
+): { startTimes: string[]; endMinute: number } {
+  const passMin = onePassMinutes(stations);
+  if (passMin <= 0) {
+    return { startTimes: [formatMinutesToTime(startMinute)], endMinute: startMinute };
+  }
+
+  const maxCycles = Math.max(...stations.map((s) => s.cycles), 1);
+  const useMultipleStarts = usesCycleSoak && maxCycles > 1;
+  const startTimes: string[] = [];
+  let cursor = startMinute;
+
+  if (useMultipleStarts) {
+    const cycleCount = Math.min(maxCycles, 3);
+    for (let i = 0; i < cycleCount; i++) {
+      startTimes.push(formatMinutesToTime(cursor));
+      cursor += passMin + START_BUFFER_MIN;
+    }
+  } else {
+    startTimes.push(formatMinutesToTime(cursor));
+    cursor += passMin + START_BUFFER_MIN;
+  }
+
+  return { startTimes, endMinute: cursor };
+}
+
+export function resolveProgramWateringSchedule(
+  programId: ProgramId,
+  cityDays: number,
+  rule: CityWateringRule,
+  parity: AddressParity,
+): {
+  scheduleMode: WateringScheduleMode;
+  scheduleLabel: string;
+  daysPerWeek: number;
+  wateringDays: Weekday[];
+  intervalDays?: number;
+} {
+  if (cityDays <= 0) {
+    return {
+      scheduleMode: "specific-days",
+      scheduleLabel: "No outdoor watering recommended for this season",
+      daysPerWeek: 0,
+      wateringDays: [],
+    };
+  }
+
+  if (programId === "D") {
+    const intervalDays = 10;
+    return {
+      scheduleMode: "interval",
+      scheduleLabel: `Every ${intervalDays} days (deep, infrequent)`,
+      daysPerWeek: 0,
+      wateringDays: [],
+      intervalDays,
+    };
+  }
+
+  if (programId === "C") {
+    const days = pickSpacedFromWeek(Math.min(7, cityDays || 7), false);
+    return {
+      scheduleMode: "specific-days",
+      scheduleLabel: `Specific days — ${formatWeekdayList(days)}`,
+      daysPerWeek: days.length,
+      wateringDays: days,
+    };
+  }
+
+  if (rule.everyThirdDayGuidance && programId === "A") {
+    return {
+      scheduleMode: "interval",
+      scheduleLabel: "Every 3 days",
+      daysPerWeek: Math.min(cityDays, 3),
+      wateringDays: [],
+      intervalDays: 3,
+    };
+  }
+
+  if (parity === "odd" && rule.oddAddressDays?.length) {
+    const programDays = getProgramDaysPerWeek(programId, cityDays);
+    const days = resolveAllowedWateringDays(programDays, rule, "odd");
+    return {
+      scheduleMode: "odd-days",
+      scheduleLabel: `Odd address days — ${formatWeekdayList(days)}`,
+      daysPerWeek: days.length,
+      wateringDays: days,
+    };
+  }
+
+  if (parity === "even" && rule.evenAddressDays?.length) {
+    const programDays = getProgramDaysPerWeek(programId, cityDays);
+    const days = resolveAllowedWateringDays(programDays, rule, "even");
+    return {
+      scheduleMode: "even-days",
+      scheduleLabel: `Even address days — ${formatWeekdayList(days)}`,
+      daysPerWeek: days.length,
+      wateringDays: days,
+    };
+  }
+
+  if (
+    programId === "B" &&
+    parity === "unknown" &&
+    !rule.oddAddressDays?.length &&
+    !rule.evenAddressDays?.length
+  ) {
+    return {
+      scheduleMode: "interval",
+      scheduleLabel: "Every 3 days",
+      daysPerWeek: 2,
+      wateringDays: [],
+      intervalDays: 3,
+    };
+  }
+
+  const programDays = getProgramDaysPerWeek(programId, cityDays);
+  const days = resolveAllowedWateringDays(programDays, rule, parity);
+  return {
+    scheduleMode: "specific-days",
+    scheduleLabel:
+      days.length > 0
+        ? `Specific days — ${formatWeekdayList(days)}`
+        : "Follow local watering ordinance",
+    daysPerWeek: days.length,
+    wateringDays: days,
+  };
+}
+
+function scheduleProgramStartTimes(
+  programs: ProgramSchedule[],
+): void {
+  let eveningCursor = EVENING_START_MIN;
+
+  const eveningOrder: ProgramId[] = ["B", "C", "D"];
+  for (const programId of eveningOrder) {
+    const program = programs.find((p) => p.programId === programId);
+    if (!program?.stations.length) continue;
+
+    const { startTimes, endMinute } = buildStartTimesForProgram(
+      eveningCursor,
+      program.stations,
+      program.usesCycleSoak,
+    );
+    program.startTimes = startTimes;
+    program.startTimeCount = startTimes.length;
+    program.primaryStartTime = startTimes[0];
+    eveningCursor = endMinute;
+  }
+
+  const grass = programs.find((p) => p.programId === "A");
+  if (grass?.stations.length) {
+    const grassStart = Math.max(eveningCursor, GRASS_START_MIN);
+    const { startTimes } = buildStartTimesForProgram(
+      grassStart,
+      grass.stations,
+      grass.usesCycleSoak,
+    );
+    grass.startTimes = startTimes;
+    grass.startTimeCount = startTimes.length;
+    grass.primaryStartTime = startTimes[0];
+  }
+}
+
+function stationMismatchWarnings(
+  station: StationInput,
+  zoneNumber: number,
 ): string[] {
-  if (!programUsesCycleSoak || maxCycles <= 1) {
-    return [PRIMARY_START];
-  }
-  const base = parseTimeToMinutes(PRIMARY_START);
-  const times: string[] = [];
-  for (let i = 0; i < Math.min(maxCycles, 3); i++) {
-    times.push(formatMinutesToTime(base + i * soakMinutes));
-  }
-  return times;
-}
-
-export function buildCycleSoakExplanation(
-  method: CycleSoakMethod,
-  cycles: number,
-  minutesPerCycle: number,
-  soakMinutes: number,
-): string {
-  if (method === "built-in") {
-    return `If your controller supports cycle-and-soak: set ${cycles} cycles of ${minutesPerCycle} minutes with ${soakMinutes} minutes soak between cycles (same total water, less runoff).`;
-  }
-  return `Use ${cycles} program start times spaced about ${soakMinutes} minutes apart. Each start time runs all stations in this program once at ${minutesPerCycle} minutes per station.`;
-}
-
-function stationMismatchWarnings(station: StationInput): string[] {
   const warnings: string[] = [];
   const sprayRotor =
     station.sprinklerType === "spray" ||
     station.sprinklerType === "rotor" ||
     station.sprinklerType === "mp-rotator";
   if (
-    (station.lawnType === "trees-shrubs" || station.lawnType === "garden-beds") &&
+    (station.lawnType === "shrubs" ||
+      station.lawnType === "trees" ||
+      station.lawnType === "garden-beds") &&
     sprayRotor
   ) {
     warnings.push(
-      `${station.name}: trees/beds on spray or rotor heads — drip or bubblers are usually a better match.`,
+      `${formatZoneDisplayName(zoneNumber, station.name)}: use drip or bubblers for trees, shrubs, and beds when possible.`,
     );
   }
   return warnings;
-}
-
-export function buildProgramTimeline(
-  program: ProgramSchedule,
-): TimelineEntry[] {
-  const entries: TimelineEntry[] = [];
-  const startTimes = program.startTimes;
-  const runsOnly = program.usesCycleSoak;
-
-  startTimes.forEach((startTime, cycleIndex) => {
-    let cursor = parseTimeToMinutes(startTime);
-    const cycleLabel =
-      startTimes.length > 1 ? ` (cycle ${cycleIndex + 1})` : "";
-
-    program.stations.forEach((station, idx) => {
-      entries.push({
-        time: formatMinutesToTime(cursor),
-        label: `${station.name} runs ${station.minutesPerCycle} min${cycleLabel}`,
-      });
-      cursor += station.minutesPerCycle;
-      if (!runsOnly && idx < program.stations.length - 1) {
-        entries.push({
-          time: formatMinutesToTime(cursor),
-          label: `Next station starts`,
-        });
-      }
-    });
-  });
-
-  return entries;
 }
 
 export function detectHydrozoneIssues(
@@ -390,7 +537,7 @@ export function detectHydrozoneIssues(
   const warnings: string[] = [];
 
   for (const program of programs) {
-    if (program.programId !== "A") continue;
+    if (program.programId !== "A" || !program.stations.length) continue;
 
     const programStations = stations.filter((s) => {
       const sched = program.stations.find((ps) => ps.stationId === s.id);
@@ -400,25 +547,29 @@ export function detectHydrozoneIssues(
     const sunTypes = new Set(programStations.map((s) => s.sunExposure));
     if (sunTypes.has("full-sun") && sunTypes.has("mostly-shade")) {
       warnings.push(
-        `Program A: ${programStations.map((s) => s.name).join(" and ")} mix full sun and heavy shade — separate stations on the controller if possible for even coverage.`,
+        `Program A: ${programStations.map((s) => s.name).join(" and ")} mix full sun and heavy shade — separate zones when possible.`,
       );
     }
 
     const slopes = new Set(programStations.map((s) => s.slope));
     if (slopes.has("flat") && (slopes.has("moderate") || slopes.has("steep"))) {
       warnings.push(
-        `Program A: flat and sloped lawn share a program — slope areas often need cycle-and-soak; consider a dedicated station for slopes.`,
+        `Program A: flat and sloped lawn share a program — consider a dedicated zone for slopes.`,
       );
     }
 
     const sprinklerFamilies = new Set(
       programStations.map((s) =>
-        s.sprinklerType === "spray" ? "spray" : s.sprinklerType === "rotor" || s.sprinklerType === "mp-rotator" ? "rotor-family" : "point",
+        s.sprinklerType === "spray"
+          ? "spray"
+          : s.sprinklerType === "rotor" || s.sprinklerType === "mp-rotator"
+            ? "rotor-family"
+            : "point",
       ),
     );
     if (sprinklerFamilies.has("spray") && sprinklerFamilies.has("rotor-family")) {
       warnings.push(
-        `Program A: spray heads and rotors apply water at very different rates — they should be on separate stations (hydrozoning).`,
+        `Program A: spray heads and rotors apply water at different rates — hydrozone them on separate programs.`,
       );
     }
   }
@@ -501,7 +652,30 @@ function buildCityWarningsAndNotes(
   const timeRestriction = formatTimeRestriction(rule);
   if (timeRestriction) notes.push(timeRestriction);
 
+  notes.push(
+    "Drip/shrub zones may run any time inside your allowed watering window (typically 7:00 PM–7:00 AM). Grass is scheduled toward morning, before sunrise.",
+  );
+
   return { warnings, notes };
+}
+
+function emptyProgram(programId: ProgramId): ProgramSchedule {
+  return {
+    programId,
+    label: `${PROGRAM_SHORT_LABELS[programId]} — ${PROGRAM_DESCRIPTIONS[programId]}`,
+    tabColor: PROGRAM_TAB_COLORS[programId],
+    zoneNames: [],
+    scheduleMode: "specific-days",
+    scheduleLabel: "No zones assigned",
+    daysPerWeek: 0,
+    wateringDays: [],
+    startTimes: [],
+    startTimeCount: 0,
+    primaryStartTime: "—",
+    stations: [],
+    totalRunMinutes: 0,
+    usesCycleSoak: false,
+  };
 }
 
 export function calculateControllerSchedule(
@@ -516,111 +690,92 @@ export function calculateControllerSchedule(
   const today = site.referenceDate ?? new Date();
   const baseDays = getBaseDaysPerWeek(site.month);
   const cityDays = applyCityDayLimits(baseDays, rule, today);
-  const cityWateringDays = resolveAllowedWateringDays(
-    cityDays,
-    rule,
-    site.addressParity,
-  );
 
-  const stationSchedules: StationSchedule[] = stations.map((station) => {
+  const stationSchedules: StationSchedule[] = stations.map((station, index) => {
     const runtime = calculateStationRuntime(station);
     const programId = assignProgram(station);
+    const zoneNumber = index + 1;
     const method: CycleSoakMethod =
       runtime.needsCycleSoak && runtime.cycles > 1
-        ? "built-in"
+        ? "multiple-start-times"
         : "built-in";
 
     return {
       stationId: station.id,
+      zoneNumber,
       name: station.name,
+      displayName: formatZoneDisplayName(zoneNumber, station.name),
       programId,
       totalMinutes: runtime.totalMinutes,
       cycles: runtime.cycles,
       minutesPerCycle: runtime.minutesPerCycle,
       soakMinutes: runtime.soakMinutes,
       cycleSoakMethod: method,
-      warnings: stationMismatchWarnings(station),
+      warnings: stationMismatchWarnings(station, zoneNumber),
     };
   });
 
-  const programIds: ProgramId[] = ["A", "B", "C"];
-  const programs: ProgramSchedule[] = [];
+  const activeByProgram = new Map<ProgramId, StationSchedule[]>();
+  for (const sched of stationSchedules) {
+    const list = activeByProgram.get(sched.programId) ?? [];
+    list.push(sched);
+    activeByProgram.set(sched.programId, list);
+  }
 
-  for (const programId of programIds) {
-    const programStations = stationSchedules.filter(
-      (s) => s.programId === programId,
+  const programs: ProgramSchedule[] = ALL_PROGRAM_IDS.map((programId) => {
+    const programStations = activeByProgram.get(programId) ?? [];
+    if (!programStations.length) return emptyProgram(programId);
+
+    const watering = resolveProgramWateringSchedule(
+      programId,
+      cityDays,
+      rule,
+      site.addressParity,
     );
-    if (!programStations.length) continue;
-
-    const programDays = getProgramDaysPerWeek(programId, cityDays);
-    const wateringDays =
-      programId === "C" && cityDays > 0
-        ? pickSpacedFromWeek(Math.min(programDays, 7), false)
-        : programDays > 0
-          ? resolveAllowedWateringDays(programDays, rule, site.addressParity)
-          : [];
 
     const usesCycleSoak = programStations.some(
       (s) => s.cycles > 1 && s.soakMinutes > 0,
     );
-    const maxCycles = Math.max(...programStations.map((s) => s.cycles));
-    const maxSoak = Math.max(...programStations.map((s) => s.soakMinutes));
 
-    const startTimes = buildProgramStartTimes(
-      usesCycleSoak,
-      maxCycles,
-      maxSoak || 30,
-    );
-
-    const cycleSoakMethod: CycleSoakMethod = usesCycleSoak
-      ? "multiple-start-times"
-      : "built-in";
-
-    let cycleSoakExplanation = "";
-    if (usesCycleSoak) {
+    let cycleSoakNote: string | undefined;
+    if (usesCycleSoak && programId === "A") {
       const rep = programStations.find((s) => s.cycles > 1) ?? programStations[0];
-      cycleSoakExplanation = buildCycleSoakExplanation(
-        cycleSoakMethod,
-        rep.cycles,
-        rep.minutesPerCycle,
-        rep.soakMinutes,
-      );
-    } else {
-      cycleSoakExplanation =
-        "No cycle-and-soak required for these stations under current conditions.";
+      cycleSoakNote = `Cycle-and-soak for grass: ${rep.cycles} start times, ${rep.minutesPerCycle} min per zone each run (about ${onePassMinutes(programStations)} min per full program pass).`;
     }
 
-    programs.push({
+    return {
       programId,
-      label: PROGRAM_LABELS[programId],
-      daysPerWeek: programDays,
-      wateringDays,
-      startTimes,
-      primaryStartTime: startTimes[0],
+      label: `${PROGRAM_SHORT_LABELS[programId]} — ${PROGRAM_DESCRIPTIONS[programId]}`,
+      tabColor: PROGRAM_TAB_COLORS[programId],
+      zoneNames: programStations.map((s) => s.displayName),
+      scheduleMode: watering.scheduleMode,
+      scheduleLabel: watering.scheduleLabel,
+      daysPerWeek: watering.daysPerWeek,
+      wateringDays: watering.wateringDays,
+      intervalDays: watering.intervalDays,
+      startTimes: [],
+      startTimeCount: 0,
+      primaryStartTime: "—",
       stations: programStations,
       totalRunMinutes: programStations.reduce(
         (sum, s) => sum + s.totalMinutes,
         0,
       ),
       usesCycleSoak,
-      cycleSoakExplanation,
-    });
-  }
+      cycleSoakNote,
+    };
+  });
+
+  scheduleProgramStartTimes(programs);
 
   const hydrozoneWarnings = detectHydrozoneIssues(stations, programs);
-
   const { warnings, notes } = buildCityWarningsAndNotes(rule, cityDays);
 
-  if (programs.some((p) => p.programId === "C")) {
+  if (programs.some((p) => p.programId === "C" && p.stations.length)) {
     notes.push(
-      "Program C (new sod/seed): establishment often needs lighter, more frequent watering than established lawn — verify city allowances for new landscape.",
+      "Program C (new sod/seed): establishment often needs lighter, more frequent watering — verify city allowances.",
     );
   }
-
-  const primaryProgram = programs[0];
-  const timeline = primaryProgram
-    ? buildProgramTimeline(primaryProgram)
-    : [];
 
   const usesStateGuide = rule.ruleStatus === "state-guide-fallback";
 
@@ -642,7 +797,7 @@ export function calculateControllerSchedule(
     timeRestriction: formatTimeRestriction(rule),
     programs,
     stationOrder: stations.map((s) => s.id),
-    timeline,
+    timeline: [],
     hydrozoneWarnings,
     startTimeMistakeNote: START_TIME_MISTAKE_NOTE,
   };
@@ -662,7 +817,7 @@ export function calculateWateringSchedule(
     stations: [
       {
         id: "single",
-        name: "Zone 1",
+        name: "Front lawn",
         sprinklerType: input.sprinklerType,
         lawnType: input.lawnType,
         sunExposure: input.sunExposure,
@@ -674,7 +829,7 @@ export function calculateWateringSchedule(
 
   if (!result) return null;
 
-  const program = result.programs[0];
+  const program = result.programs.find((p) => p.stations.length > 0);
   const station = program?.stations[0];
 
   return {
@@ -686,7 +841,7 @@ export function calculateWateringSchedule(
     cycles: station?.cycles ?? 1,
     minutesPerCycle: station?.minutesPerCycle ?? 0,
     soakMinutes: station?.soakMinutes ?? 0,
-    recommendedStartTime: program?.primaryStartTime ?? PRIMARY_START,
+    recommendedStartTime: program?.primaryStartTime ?? "5:00 AM",
     warnings: [...result.warnings, ...result.hydrozoneWarnings],
     notes: result.notes,
     badge: result.badge,
@@ -703,9 +858,10 @@ export function calculateWateringSchedule(
 }
 
 export function createDefaultStation(index: number): StationInput {
+  const names = ["Front lawn", "Back lawn", "Side yard", "Park strip"];
   return {
     id: `station-${index}-${Date.now()}`,
-    name: `Station ${index + 1}`,
+    name: names[index] ?? `Zone ${index + 1}`,
     sprinklerType: index === 0 ? "spray" : "rotor",
     lawnType: "established-lawn",
     sunExposure: "full-sun",

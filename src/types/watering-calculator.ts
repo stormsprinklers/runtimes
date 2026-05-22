@@ -8,7 +8,8 @@ export type LawnType =
   | "established-lawn"
   | "new-sod"
   | "new-seed"
-  | "trees-shrubs"
+  | "shrubs"
+  | "trees"
   | "garden-beds";
 
 export type SunExposure = "full-sun" | "mixed" | "mostly-shade";
@@ -34,12 +35,21 @@ export type AutomationStatus =
   | "recommendation-only"
   | "provider-aware";
 
-export type ProgramId = "A" | "B" | "C";
+export type ProgramId = "A" | "B" | "C" | "D";
+
+export const ALL_PROGRAM_IDS: ProgramId[] = ["A", "B", "C", "D"];
 
 export type CycleSoakMethod = "built-in" | "multiple-start-times";
 
+export type WateringScheduleMode =
+  | "specific-days"
+  | "interval"
+  | "odd-days"
+  | "even-days";
+
 export interface StationInput {
   id: string;
+  /** User label for the zone (shown as "Zone N — {name}") */
   name: string;
   sprinklerType: SprinklerType;
   lawnType: LawnType;
@@ -77,7 +87,9 @@ export interface WateringCalculatorInput {
 
 export interface StationSchedule {
   stationId: string;
+  zoneNumber: number;
   name: string;
+  displayName: string;
   programId: ProgramId;
   totalMinutes: number;
   cycles: number;
@@ -90,14 +102,20 @@ export interface StationSchedule {
 export interface ProgramSchedule {
   programId: ProgramId;
   label: string;
+  tabColor: string;
+  zoneNames: string[];
+  scheduleMode: WateringScheduleMode;
+  scheduleLabel: string;
   daysPerWeek: number;
   wateringDays: Weekday[];
+  intervalDays?: number;
   startTimes: string[];
+  startTimeCount: number;
   primaryStartTime: string;
   stations: StationSchedule[];
   totalRunMinutes: number;
   usesCycleSoak: boolean;
-  cycleSoakExplanation: string;
+  cycleSoakNote?: string;
 }
 
 export interface TimelineEntry {

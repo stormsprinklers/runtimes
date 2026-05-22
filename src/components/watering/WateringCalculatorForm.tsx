@@ -179,22 +179,12 @@ export function WateringCalculatorForm() {
         </fieldset>
 
         <fieldset className="mt-8 space-y-4 border-t border-[var(--color-light-blue)] pt-8">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <legend className="font-display text-lg text-[var(--color-navy)]">
-              Your stations
-            </legend>
-            <button
-              type="button"
-              onClick={addStation}
-              disabled={stations.length >= MAX_STATIONS}
-              className="min-h-12 w-full rounded-full bg-[var(--color-medium-blue)] px-4 py-3 text-sm font-bold text-white active:scale-[0.98] disabled:opacity-40 sm:w-auto sm:min-h-11 sm:py-2"
-            >
-              + Add station
-            </button>
-          </div>
+          <legend className="font-display text-lg text-[var(--color-navy)]">
+            Your zones
+          </legend>
           <p className="text-sm leading-relaxed text-[var(--color-navy)]/70">
-            One row per controller station (valve). Programs A, B, and C are
-            assigned by landscape type — lawn, drip/shrubs, or new sod/seed.
+            One card per controller zone. Name each zone (e.g. front lawn).
+            Programs A–D group zones that share run days and start times.
           </p>
 
           <div className="space-y-4">
@@ -209,6 +199,15 @@ export function WateringCalculatorForm() {
               />
             ))}
           </div>
+
+          <button
+            type="button"
+            onClick={addStation}
+            disabled={stations.length >= MAX_STATIONS}
+            className="min-h-12 w-full rounded-full bg-[var(--color-medium-blue)] px-4 py-3 text-sm font-bold text-white active:scale-[0.98] disabled:opacity-40 sm:min-h-11 sm:py-2"
+          >
+            + Add station
+          </button>
         </fieldset>
       </div>
 

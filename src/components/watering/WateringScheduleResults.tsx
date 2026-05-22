@@ -9,9 +9,8 @@ import {
 } from "@/lib/ui";
 import type { ControllerCalculatorResult } from "@/types/watering-calculator";
 import { ExportPdfButton } from "./ExportPdfButton";
-import { ProgramScheduleCard } from "./ProgramScheduleCard";
+import { ProgramTabs } from "./ProgramTabs";
 import { RestrictionBadge } from "./RestrictionBadge";
-import { RunTimeline } from "./RunTimeline";
 
 interface WateringScheduleResultsProps {
   result: ControllerCalculatorResult;
@@ -22,8 +21,6 @@ export function WateringScheduleResults({
   result,
   onReset,
 }: WateringScheduleResultsProps) {
-  const primaryProgram = result.programs[0];
-
   return (
     <div className="space-y-5 sm:space-y-6">
       <div className={cardShellClass}>
@@ -34,9 +31,8 @@ export function WateringScheduleResults({
           <RestrictionBadge status={result.badge} label={result.badgeLabel} />
         </div>
         <p className="mt-2 text-sm leading-relaxed text-[var(--color-navy)]/80">
-          {result.cityName} · {result.programs.length} program
-          {result.programs.length !== 1 ? "s" : ""} · {result.stationOrder.length}{" "}
-          station{result.stationOrder.length !== 1 ? "s" : ""}
+          {result.cityName} · {result.stationOrder.length} zone
+          {result.stationOrder.length !== 1 ? "s" : ""}
         </p>
 
         <div className="mt-4 rounded-lg bg-[var(--color-light-grey)]/80 p-3 text-sm sm:p-4">
@@ -84,24 +80,7 @@ export function WateringScheduleResults({
         </div>
       )}
 
-      {result.programs.map((program) => (
-        <ProgramScheduleCard key={program.programId} program={program} />
-      ))}
-
-      {primaryProgram && result.timeline.length > 0 && (
-        <div className={cardShellClass}>
-          <h3 className="font-display text-lg text-[var(--color-navy)] sm:text-xl">
-            Run order — {primaryProgram.label}
-          </h3>
-          <p className="mt-1 text-sm leading-relaxed text-[var(--color-navy)]/70">
-            After the first start time ({primaryProgram.primaryStartTime}) on a
-            watering day:
-          </p>
-          <div className="mt-4">
-            <RunTimeline entries={result.timeline} />
-          </div>
-        </div>
-      )}
+      <ProgramTabs programs={result.programs} />
 
       {(result.warnings.length > 0 || result.notes.length > 0) && (
         <div className="rounded-xl bg-[var(--color-light-blue)]/40 p-4 sm:p-5">

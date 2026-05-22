@@ -1,9 +1,7 @@
-import { weekdayLabels } from "@/data/wateringRestrictions";
 import { brand } from "@/lib/brand";
 import type {
   ControllerCalculatorResult,
   ProgramSchedule,
-  TimelineEntry,
 } from "@/types/watering-calculator";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -143,117 +141,27 @@ function bodyText(
 }
 
 function programBlock(doc: jsPDF, program: ProgramSchedule, startY: number): number {
+  if (!program.stations.length) return startY;
+
   let y = ensureSpace(doc, startY, 20);
   y = sectionTitle(doc, y, program.label);
 
-  const days =
-    program.wateringDays.length > 0
-      ? program.wateringDays.map((d) => weekdayLabels[d]).join(", ")
-      : "Per local rules";
-  y = bodyText(doc, y, [
-    `${program.daysPerWeek} day${program.daysPerWeek !== 1 ? "s" : ""} per week — ${days}`,
-  ]);
-
-  const startLabel =
-    program.startTimes.length > 1 ? "Start times" : "Start time";
+  y = bodyText(doc, y, [`Zones: ${program.zoneNames.join("; ")}`], 9);
+  y = bodyText(doc, y, [`Watering days: ${program.scheduleLabel}`], 9);
   y = bodyText(
     doc,
     y,
-    [`${startLabel}: ${program.startTimes.join(", ")}`],
+    [
+      `${program.startTimeCount} start time${program.startTimeCount !== 1 ? "s" : ""}: ${program.startTimes.join(", ")}`,
+    ],
     9,
   );
 
-  autoTable(doc, {
-    startY: y,
-    margin: { left: MARGIN, right: MARGIN, bottom: FOOTER_HEIGHT },
-    head: [["Station", "Runtime", "Cycles", "Soak"]],
-    body: program.stations.map((s) => [
-      s.name,
-      `${s.totalMinutes} min total`,
-      `${s.cycles} × ${s.minutesPerCycle} min`,
-      s.soakMinutes > 0 ? `${s.soakMinutes} min` : "—",
-    ]),
-    styles: {
-      fontSize: 8,
-      cellPadding: 2.5,
-      textColor: navy,
-    },
-    headStyles: {
-      fillColor: mediumBlue,
-      textColor: [255, 255, 255],
-      fontStyle: "bold",
-    },
-    alternateRowStyles: { fillColor: [240, 248, 252] },
-    theme: "striped",
-  });
-
-  y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable
-    .finalY + 4;
-
-  y = bodyText(doc, y, [
-    `One program run ≈ ${program.totalRunMinutes} minutes (all stations in sequence)`,
-  ]);
-
-  if (program.usesCycleSoak) {
-    y = ensureSpace(doc, y, 14);
-    doc.setFillColor(235, 245, 250);
-    doc.roundedRect(MARGIN, y, PAGE_WIDTH - MARGIN * 2, 14, 1, 1, "F");
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(8);
-    doc.setTextColor(...navy);
-    doc.text("Cycle-and-soak", MARGIN + 3, y + 5);
-    doc.setFont("helvetica", "normal");
-    const soakLines = doc.splitTextToSize(
-      program.cycleSoakExplanation,
-      PAGE_WIDTH - MARGIN * 2 - 6,
-    );
-    doc.text(soakLines, MARGIN + 3, y + 10);
-    y += 14 + soakLines.length * 3;
-  }
-
-  const stationWarnings = program.stations.flatMap((s) => s.warnings);
-  if (stationWarnings.length > 0) {
-    y = bodyText(
-      doc,
-      y,
-      stationWarnings.map((w) => `• ${w}`),
-      8,
-    );
+  if (program.cycleSoakNote) {
+    y = bodyText(doc, y, [program.cycleSoakNote], 8);
   }
 
   return y + 6;
-}
-
-function timelineTable(
-  doc: jsPDF,
-  label: string,
-  primaryStart: string,
-  entries: TimelineEntry[],
-  startY: number,
-): number {
-  let y = ensureSpace(doc, startY, 16);
-  y = sectionTitle(doc, y, `Run order — ${label}`);
-  y = bodyText(doc, y, [
-    `After first start time (${primaryStart}) on a watering day:`,
-  ]);
-
-  autoTable(doc, {
-    startY: y,
-    margin: { left: MARGIN, right: MARGIN, bottom: FOOTER_HEIGHT },
-    head: [["Time", "What happens"]],
-    body: entries.map((e) => [e.time, e.label]),
-    styles: { fontSize: 8, cellPadding: 2.5, textColor: navy },
-    headStyles: {
-      fillColor: mediumBlue,
-      textColor: [255, 255, 255],
-      fontStyle: "bold",
-    },
-    alternateRowStyles: { fillColor: [240, 248, 252] },
-    theme: "striped",
-  });
-
-  return (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable
-    .finalY + 8;
 }
 
 function bulletList(doc: jsPDF, title: string, items: string[], startY: number): number {
@@ -312,17 +220,6 @@ export async function exportSchedulePdf(
 
   for (const program of result.programs) {
     y = programBlock(doc, program, y);
-  }
-
-  const primary = result.programs[0];
-  if (primary && result.timeline.length > 0) {
-    y = timelineTable(
-      doc,
-      primary.label,
-      primary.primaryStartTime,
-      result.timeline,
-      y,
-    );
   }
 
   if (result.hydrozoneWarnings.length > 0) {

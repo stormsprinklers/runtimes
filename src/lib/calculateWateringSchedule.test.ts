@@ -6,7 +6,9 @@ import {
   calculateControllerSchedule,
   calculateWateringSchedule,
   createDefaultStation,
+  formatMinutesToTime,
   parseNoWaterBeforeDate,
+  parseTimeToMinutes,
   resolveAllowedWateringDays,
 } from "@/lib/calculateWateringSchedule";
 import { getCityRule } from "@/data/wateringRestrictions";
@@ -42,23 +44,65 @@ describe("applyCityDayLimits", () => {
 });
 
 describe("assignProgram", () => {
-  it("groups lawn to A and drip to B", () => {
+  it("groups lawn to A and drip shrubs to B", () => {
     const lawn = createDefaultStation(0);
-    const drip = { ...createDefaultStation(1), lawnType: "garden-beds" as const, sprinklerType: "drip" as const };
+    const drip = {
+      ...createDefaultStation(1),
+      lawnType: "shrubs" as const,
+      sprinklerType: "drip" as const,
+    };
     expect(assignProgram(lawn)).toBe("A");
     expect(assignProgram(drip)).toBe("B");
   });
 
-  it("groups new sod to C", () => {
+  it("groups new sod to C and trees to D", () => {
     const sod = { ...createDefaultStation(0), lawnType: "new-sod" as const };
+    const trees = { ...createDefaultStation(1), lawnType: "trees" as const };
     expect(assignProgram(sod)).toBe("C");
+    expect(assignProgram(trees)).toBe("D");
   });
 });
 
 describe("calculateControllerSchedule", () => {
   const julyDate = new Date(2026, 6, 15);
 
-  it("3 stations produce lawn + drip programs", () => {
+  it("returns all four program tabs", () => {
+    const result = calculateControllerSchedule({
+      site: {
+        county: "utah",
+        cityId: "provo",
+        addressParity: "unknown",
+        month: 6,
+        referenceDate: julyDate,
+      },
+      stations: [createDefaultStation(0)],
+    });
+    expect(result?.programs).toHaveLength(4);
+    expect(result?.programs.map((p) => p.programId)).toEqual([
+      "A",
+      "B",
+      "C",
+      "D",
+    ]);
+  });
+
+  it("formats zone display names", () => {
+    const result = calculateControllerSchedule({
+      site: {
+        county: "utah",
+        cityId: "provo",
+        addressParity: "unknown",
+        month: 6,
+        referenceDate: julyDate,
+      },
+      stations: [{ ...createDefaultStation(0), name: "Front lawn" }],
+    });
+    const zone = result?.programs.find((p) => p.programId === "A")
+      ?.zoneNames[0];
+    expect(zone).toBe("Zone 1 — Front lawn");
+  });
+
+  it("3 zones produce lawn + drip programs", () => {
     const result = calculateControllerSchedule({
       site: {
         county: "utah",
@@ -78,7 +122,6 @@ describe("calculateControllerSchedule", () => {
         },
       ],
     });
-    expect(result?.programs.length).toBe(2);
     expect(result?.programs.find((p) => p.programId === "A")?.stations.length).toBe(2);
     expect(result?.programs.find((p) => p.programId === "B")?.stations.length).toBe(1);
   });
@@ -98,7 +141,7 @@ describe("calculateControllerSchedule", () => {
     expect(programA?.daysPerWeek).toBe(2);
   });
 
-  it("clay + steep station gets extra cycle and 45 min soak", () => {
+  it("clay + steep grass gets cycle-soak start times", () => {
     const result = calculateControllerSchedule({
       site: {
         county: "utah",
@@ -115,12 +158,13 @@ describe("calculateControllerSchedule", () => {
         },
       ],
     });
-    const station = result?.programs[0]?.stations[0];
-    expect(station?.cycles).toBe(4);
-    expect(station?.soakMinutes).toBe(45);
+    const program = result?.programs.find((p) => p.programId === "A");
+    expect(program?.usesCycleSoak).toBe(true);
+    expect(program?.startTimeCount).toBeGreaterThan(1);
+    expect(program?.cycleSoakNote).toBeTruthy();
   });
 
-  it("cycle-soak program gets multiple start times", () => {
+  it("trees do not get cycle-soak", () => {
     const result = calculateControllerSchedule({
       site: {
         county: "utah",
@@ -132,14 +176,71 @@ describe("calculateControllerSchedule", () => {
       stations: [
         {
           ...createDefaultStation(0),
+          lawnType: "trees",
+          sprinklerType: "drip",
           soilType: "clay",
-          slope: "flat",
+          slope: "steep",
         },
       ],
     });
-    const program = result?.programs[0];
-    expect(program?.usesCycleSoak).toBe(true);
+    const program = result?.programs.find((p) => p.programId === "D");
+    expect(program?.usesCycleSoak).toBe(false);
+    expect(program?.scheduleMode).toBe("interval");
+    expect(program?.startTimeCount).toBe(1);
+  });
+
+  it("spaces cycle-soak start times by full program pass", () => {
+    const result = calculateControllerSchedule({
+      site: {
+        county: "utah",
+        cityId: "provo",
+        addressParity: "unknown",
+        month: 6,
+        referenceDate: julyDate,
+      },
+      stations: [
+        { ...createDefaultStation(0), soilType: "clay", slope: "flat" },
+        { ...createDefaultStation(1), name: "Back", soilType: "clay", slope: "flat" },
+        { ...createDefaultStation(2), name: "Side", soilType: "clay", slope: "flat" },
+      ],
+    });
+    const program = result?.programs.find((p) => p.programId === "A");
     expect(program?.startTimes.length).toBeGreaterThan(1);
+    const t0 = parseTimeToMinutes(program!.startTimes[0]);
+    const t1 = parseTimeToMinutes(program!.startTimes[1]);
+    const passMin = program!.stations.reduce(
+      (s, st) => s + st.minutesPerCycle,
+      0,
+    );
+    expect(t1 - t0).toBeGreaterThanOrEqual(passMin);
+  });
+
+  it("grass program starts in the morning after evening programs", () => {
+    const result = calculateControllerSchedule({
+      site: {
+        county: "utah",
+        cityId: "provo",
+        addressParity: "unknown",
+        month: 6,
+        referenceDate: julyDate,
+      },
+      stations: [
+        { ...createDefaultStation(0), name: "Lawn" },
+        {
+          ...createDefaultStation(1),
+          name: "Shrubs",
+          lawnType: "shrubs",
+          sprinklerType: "drip",
+        },
+      ],
+    });
+    const grass = result?.programs.find((p) => p.programId === "A");
+    const shrubs = result?.programs.find((p) => p.programId === "B");
+    const grassMin = parseTimeToMinutes(grass!.startTimes[0]);
+    const shrubMin = parseTimeToMinutes(shrubs!.startTimes[0]);
+    expect(shrubMin).toBeGreaterThanOrEqual(19 * 60);
+    expect(grassMin).toBeGreaterThanOrEqual(4 * 60);
+    expect(grassMin).toBeLessThan(8 * 60);
   });
 
   it("mixed sun on two lawn stations triggers hydrozone warning", () => {
@@ -171,30 +272,13 @@ describe("calculateControllerSchedule", () => {
       stations: [createDefaultStation(0)],
     });
     expect(result?.cityDaysPerWeek).toBe(0);
-    expect(result?.programs[0]?.wateringDays.length).toBe(0);
+    expect(result?.programs.find((p) => p.programId === "A")?.wateringDays.length).toBe(0);
     expect(result?.warnings.some((w) => w.includes("May 1"))).toBe(true);
-  });
-
-  it("builds a run-order timeline", () => {
-    const result = calculateControllerSchedule({
-      site: {
-        county: "utah",
-        cityId: "provo",
-        addressParity: "unknown",
-        month: 6,
-        referenceDate: julyDate,
-      },
-      stations: [
-        createDefaultStation(0),
-        { ...createDefaultStation(1), name: "Station 2" },
-      ],
-    });
-    expect(result?.timeline.length).toBeGreaterThan(0);
   });
 });
 
 describe("calculateWateringSchedule (single-zone wrapper)", () => {
-  it("clay + steep adds a cycle with 45 min soak", () => {
+  it("clay + steep grass adds cycle-soak cycles", () => {
     const result = calculateWateringSchedule({
       county: "utah",
       cityId: "provo",
@@ -225,5 +309,11 @@ describe("parseNoWaterBeforeDate", () => {
     const d = parseNoWaterBeforeDate("May 15", 2026);
     expect(d?.getMonth()).toBe(4);
     expect(d?.getDate()).toBe(15);
+  });
+});
+
+describe("formatMinutesToTime", () => {
+  it("formats 4 AM after extended timeline", () => {
+    expect(formatMinutesToTime(24 * 60 + 4 * 60)).toMatch(/4:00 AM/i);
   });
 });

@@ -1,3 +1,4 @@
+import { formatZoneDisplayName } from "@/lib/zoneDisplay";
 import { formInputClass, formSelectClass } from "@/lib/ui";
 import type {
   LawnType,
@@ -23,16 +24,27 @@ export function StationCard({
   onChange,
   onRemove,
 }: StationCardProps) {
+  const zoneNumber = index + 1;
+
   return (
     <div className="rounded-xl border border-[var(--color-light-blue)] bg-[var(--color-light-grey)]/40 p-3 sm:p-4">
       <div className="mb-3 flex items-start justify-between gap-2">
-        <input
-          type="text"
-          value={station.name}
-          onChange={(e) => onChange({ name: e.target.value })}
-          className={`${formInputClass} font-display !mt-0 border-transparent bg-transparent !py-2 focus:border-[var(--color-medium-blue)] focus:bg-white`}
-          aria-label={`Station ${index + 1} name`}
-        />
+        <label className="min-w-0 flex-1">
+          <span className="font-display block text-sm text-[var(--color-navy)]">
+            {formatZoneDisplayName(zoneNumber, station.name)}
+          </span>
+          <span className="mt-1 block text-xs text-[var(--color-navy)]/55">
+            Zone name
+          </span>
+          <input
+            type="text"
+            value={station.name}
+            onChange={(e) => onChange({ name: e.target.value })}
+            placeholder="e.g. Front lawn"
+            className={`${formInputClass} !mt-1`}
+            aria-label={`Name for zone ${zoneNumber}`}
+          />
+        </label>
         {canRemove && (
           <button
             type="button"
@@ -66,17 +78,18 @@ export function StationCard({
 
         <label className="block">
           <span className="text-xs font-semibold uppercase text-[var(--color-navy)]/60">
-            Landscape type
+            Vegetation type
           </span>
           <select
             value={station.lawnType}
             onChange={(e) => onChange({ lawnType: e.target.value as LawnType })}
             className={formSelectClass}
           >
-            <option value="established-lawn">Established lawn</option>
+            <option value="established-lawn">Grass / established lawn</option>
             <option value="new-sod">New sod</option>
             <option value="new-seed">New seed</option>
-            <option value="trees-shrubs">Trees / shrubs</option>
+            <option value="shrubs">Shrubs</option>
+            <option value="trees">Trees</option>
             <option value="garden-beds">Garden beds</option>
           </select>
         </label>
