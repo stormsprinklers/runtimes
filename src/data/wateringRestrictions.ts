@@ -1,0 +1,703 @@
+import type {
+  AutomationStatus,
+  County,
+  Weekday,
+} from "@/types/watering-calculator";
+
+export const UTAH_WEEKLY_LAWN_GUIDE_URL = "https://conservewater.utah.gov/guide/";
+
+export const SALT_LAKE_COUNTY_RESTRICTIONS_URL =
+  "https://www.saltlakecounty.gov/public-works/water-conservation/";
+
+export interface CityWateringRule {
+  id: string;
+  county: County;
+  city: string;
+  ruleStatus: AutomationStatus;
+  automationStatus: AutomationStatus;
+  sourceUrl: string;
+  sourceLabel: string;
+  maxDaysPerWeek?: number;
+  noWateringStart?: string;
+  noWateringEnd?: string;
+  oddAddressDays?: Weekday[];
+  evenAddressDays?: Weekday[];
+  generalAllowedDays?: Weekday[];
+  noWateringBeforeDate?: string;
+  requiresProviderLookup?: boolean;
+  noConsecutiveDays?: boolean;
+  waterDaysToUse?: number;
+  subtractOneDayFromNormal?: boolean;
+  oncePerWeekCap?: boolean;
+  everyThirdDayGuidance?: boolean;
+  minHoursBetweenCycles?: number;
+  recommendationText: string;
+  restrictionText: string;
+  providerNote?: string;
+  paysonPdfReview?: boolean;
+}
+
+const NO_10 = "10:00";
+const NO_18 = "18:00";
+
+const MWF: Weekday[] = ["monday", "wednesday", "friday"];
+const TTS: Weekday[] = ["tuesday", "thursday", "saturday"];
+const TTSun: Weekday[] = ["tuesday", "thursday", "sunday"];
+
+function r(
+  partial: Omit<CityWateringRule, "ruleStatus" | "automationStatus"> & {
+    ruleStatus?: AutomationStatus;
+    automationStatus?: AutomationStatus;
+  },
+): CityWateringRule {
+  const status = partial.ruleStatus ?? partial.automationStatus ?? "state-guide-fallback";
+  return {
+    ...partial,
+    ruleStatus: status,
+    automationStatus: partial.automationStatus ?? status,
+  };
+}
+
+const stateFallback = (
+  id: string,
+  city: string,
+  county: County,
+  sourceLabel: string,
+  sourceUrl: string,
+  restrictionText: string,
+  extra?: Partial<CityWateringRule>,
+): CityWateringRule =>
+  r({
+    id,
+    county,
+    city,
+    ruleStatus: "state-guide-fallback",
+    sourceLabel,
+    sourceUrl,
+    generalAllowedDays: MWF,
+    maxDaysPerWeek: 3,
+    restrictionText,
+    recommendationText:
+      "Follow the Utah Weekly Lawn Watering Guide for watering frequency this week.",
+    ...extra,
+  });
+
+export const cityWateringRules: CityWateringRule[] = [
+  // Utah County
+  stateFallback(
+    "provo",
+    "Provo",
+    "utah",
+    "Provo Water Efficiency Programs",
+    "https://www.provo.gov/departments/power-water/water-efficiency-programs",
+    "No specific enforceable watering schedule verified. Use Utah Weekly Lawn Watering Guide as default schedule source.",
+  ),
+  stateFallback(
+    "orem",
+    "Orem",
+    "utah",
+    "Orem Water",
+    "https://www.orem.gov/351/Water",
+    "No specific enforceable watering schedule verified. Orem's page focuses on water supply, storage, reservoirs, and long-term water planning.",
+    {
+      recommendationText:
+        "Use the state weekly guide. Confirm culinary vs pressurized irrigation rules on the city site.",
+    },
+  ),
+  r({
+    id: "lehi",
+    county: "utah",
+    city: "Lehi",
+    ruleStatus: "auto-update",
+    sourceLabel: "Lehi Pressurized Irrigation",
+    sourceUrl:
+      "https://www.lehi-ut.gov/departments/public-works/water-and-sewer/pressurized-irrigation/",
+    maxDaysPerWeek: 2,
+    noConsecutiveDays: true,
+    minHoursBetweenCycles: 48,
+    noWateringStart: NO_10,
+    noWateringEnd: NO_18,
+    generalAllowedDays: ["monday", "thursday"],
+    restrictionText:
+      "Phase 2 Water Shortage Management Plan: no consecutive-day sprinkler irrigation; max 2 days/week with at least 48 hours between irrigation cycles.",
+    recommendationText:
+      "Water at most 2 non-consecutive days per week. Wait 48+ hours between irrigation cycles on the same zone.",
+  }),
+  r({
+    id: "american-fork",
+    county: "utah",
+    city: "American Fork",
+    ruleStatus: "auto-update",
+    sourceLabel: "American Fork Water Conservation",
+    sourceUrl: "https://www.afcity.org/198/Water-Conservation",
+    maxDaysPerWeek: 2,
+    waterDaysToUse: 2,
+    noWateringBeforeDate: "May 1",
+    oddAddressDays: MWF,
+    evenAddressDays: TTS,
+    noWateringStart: NO_10,
+    noWateringEnd: NO_18,
+    restrictionText:
+      "Recommended: delay PI watering until May 1, then water only 2 of the 3 assigned days based on address.",
+    recommendationText:
+      "After May 1, pick 2 of your 3 assigned address-based watering days each week.",
+  }),
+  r({
+    id: "pleasant-grove",
+    county: "utah",
+    city: "Pleasant Grove",
+    ruleStatus: "auto-update",
+    sourceLabel: "Pleasant Grove Secondary Water",
+    sourceUrl: "https://www.pleasantgrove.org/305/Secondary-Water",
+    maxDaysPerWeek: 3,
+    oddAddressDays: MWF,
+    evenAddressDays: TTSun,
+    noWateringStart: NO_10,
+    noWateringEnd: NO_18,
+    restrictionText:
+      "Odd addresses: Monday, Wednesday, Friday. Even addresses: Tuesday, Thursday, Sunday. No watering 10 AM–6 PM.",
+    recommendationText: "Water only on your assigned address days outside restricted hours.",
+  }),
+  r({
+    id: "lindon",
+    county: "utah",
+    city: "Lindon",
+    ruleStatus: "auto-update",
+    sourceLabel: "Lindon Water Division",
+    sourceUrl: "https://www.lindoncity.org/270/Water-Division",
+    maxDaysPerWeek: 2,
+    everyThirdDayGuidance: true,
+    noWateringStart: NO_10,
+    noWateringEnd: NO_18,
+    generalAllowedDays: ["monday", "thursday"],
+    restrictionText:
+      "No outdoor watering between 10 AM and 6 PM. Every-third-day watering is generally adequate for established lawns.",
+    recommendationText:
+      "Use an every-third-day pattern for established turf when possible.",
+  }),
+  stateFallback(
+    "vineyard",
+    "Vineyard",
+    "utah",
+    "Vineyard Water Conservation",
+    "https://www.vineyardutah.gov/departments/public-works/water-conservation",
+    "No specific city restriction verified. Use Utah Weekly Lawn Watering Guide.",
+  ),
+  r({
+    id: "highland",
+    county: "utah",
+    city: "Highland",
+    ruleStatus: "auto-update",
+    sourceLabel: "Highland Watering Days",
+    sourceUrl: "https://www.highlandut.gov/261/Watering-Days",
+    maxDaysPerWeek: 3,
+    oddAddressDays: TTS,
+    evenAddressDays: MWF,
+    noWateringStart: "18:00",
+    noWateringEnd: "10:00",
+    restrictionText:
+      "Even addresses: Monday, Wednesday, Friday. Odd addresses: Tuesday, Thursday, Saturday. No Sunday residential watering. Watering hours generally 6 PM–10 AM.",
+    recommendationText: "Do not water on Sunday. Water during evening and early morning hours only.",
+  }),
+  r({
+    id: "alpine",
+    county: "utah",
+    city: "Alpine",
+    ruleStatus: "auto-update",
+    sourceLabel: "Alpine Water Conservation",
+    sourceUrl: "https://alpinecity.org/201/Water-Conservation",
+    maxDaysPerWeek: 3,
+    oddAddressDays: MWF,
+    evenAddressDays: TTS,
+    noWateringStart: "19:00",
+    noWateringEnd: "07:00",
+    restrictionText:
+      "Odd addresses: Monday, Wednesday, Friday (7 PM–7 AM). Even addresses: Tuesday, Thursday, Saturday (7 PM–7 AM).",
+    recommendationText: "Water only between 7:00 PM and 7:00 AM on assigned days.",
+  }),
+  r({
+    id: "cedar-hills",
+    county: "utah",
+    city: "Cedar Hills",
+    ruleStatus: "manual-review",
+    sourceLabel: "Cedar Hills Water Conservation",
+    sourceUrl: "https://www.cedarhills.org/pages/water_conservation",
+    maxDaysPerWeek: 3,
+    generalAllowedDays: MWF,
+    restrictionText:
+      "No exact recurring day/time restriction verified. Page references shortened watering season and PI conservation infrastructure.",
+    recommendationText:
+      "Manual review recommended. Confirm PI rules on the city page; use state guide until verified.",
+  }),
+  r({
+    id: "saratoga-springs",
+    county: "utah",
+    city: "Saratoga Springs",
+    ruleStatus: "auto-update",
+    sourceLabel: "Saratoga Springs Water Conservation",
+    sourceUrl:
+      "https://www.saratogaspringscity.com/departments/water/water-conservation",
+    maxDaysPerWeek: 3,
+    generalAllowedDays: MWF,
+    noWateringStart: NO_10,
+    noWateringEnd: NO_18,
+    restrictionText:
+      "Avoid watering between 10 AM and 6 PM; do not irrigate during the heat of the day.",
+    recommendationText: "Schedule irrigation before 10 AM or after 6 PM.",
+  }),
+  stateFallback(
+    "eagle-mountain",
+    "Eagle Mountain",
+    "utah",
+    "Eagle Mountain Water Conservation",
+    "https://www.eaglemountaincity.com/departments/utilities/water-conservation",
+    "Current enforceable rule not clearly extractable from official text. Use Weekly Lawn Watering Guide unless city posts stricter notice.",
+    { recommendationText: "Monitor city page for stricter seasonal notices." },
+  ),
+  stateFallback(
+    "spanish-fork",
+    "Spanish Fork",
+    "utah",
+    "Spanish Fork Water Conservation",
+    "https://www.spanishfork.org/departments/public_works/water_conservation.php",
+    "No special restriction verified from prior official lookup. Use city conservation/PI pages plus state guide.",
+  ),
+  r({
+    id: "springville",
+    county: "utah",
+    city: "Springville",
+    ruleStatus: "auto-update",
+    sourceLabel: "Springville Conserve Water",
+    sourceUrl:
+      "https://www.springville.org/departments___services/public_works/water/conserve_water.php",
+    maxDaysPerWeek: 3,
+    generalAllowedDays: MWF,
+    noWateringStart: NO_10,
+    noWateringEnd: NO_18,
+    restrictionText: "Avoid watering lawns between 10 AM and 6 PM.",
+    recommendationText: "Recommendation — confirm any seasonal PI notices on the city site.",
+  }),
+  r({
+    id: "mapleton",
+    county: "utah",
+    city: "Mapleton",
+    ruleStatus: "manual-review",
+    sourceLabel: "Mapleton PI Responsibilities",
+    sourceUrl:
+      "https://www.mapleton.org/departments/public_works/pressurized_irrigation.php",
+    maxDaysPerWeek: 3,
+    generalAllowedDays: MWF,
+    restrictionText:
+      "No current restriction verified. Monitor PI/responsibilities page and use state guide fallback.",
+    recommendationText: "Monitor Mapleton PI page for updates.",
+  }),
+  r({
+    id: "payson",
+    county: "utah",
+    city: "Payson",
+    ruleStatus: "manual-review",
+    sourceLabel: "Payson PI Watering Schedule PDF",
+    sourceUrl:
+      "https://www.paysonutah.org/departments/public_works/pressurized_irrigation",
+    maxDaysPerWeek: 3,
+    generalAllowedDays: MWF,
+    noWateringStart: NO_10,
+    noWateringEnd: NO_18,
+    paysonPdfReview: true,
+    restrictionText:
+      "Official PI schedule asks residents to avoid watering between 10 AM and 6 PM; PDF parsing needed for full schedule.",
+    recommendationText:
+      "Download the official Payson PI watering schedule PDF for exact assigned days.",
+  }),
+  r({
+    id: "salem",
+    county: "utah",
+    city: "Salem",
+    ruleStatus: "auto-update",
+    sourceLabel: "Salem Mayor's Message",
+    sourceUrl: "https://www.salemcity.org/",
+    maxDaysPerWeek: 3,
+    oddAddressDays: MWF,
+    evenAddressDays: TTS,
+    generalAllowedDays: MWF,
+    restrictionText:
+      "Mayor's message: at minimum, odd addresses water Monday, Wednesday, Friday; also follow Utah Weekly Lawn Watering Guide.",
+    recommendationText:
+      "Odd addresses: at minimum Mon/Wed/Fri. Even addresses: confirm on city site; follow state guide.",
+  }),
+  r({
+    id: "santaquin",
+    county: "utah",
+    city: "Santaquin",
+    ruleStatus: "manual-review",
+    sourceLabel: "Santaquin Pressurized Irrigation",
+    sourceUrl:
+      "https://www.santaquin.org/departments/public-works/pressurized-irrigation",
+    maxDaysPerWeek: 3,
+    generalAllowedDays: MWF,
+    restrictionText:
+      "No specific current day/time restriction verified. PI page gives startup/shutdown timing — monitor for updates.",
+    recommendationText: "Monitor Santaquin PI page for seasonal open/close dates.",
+  }),
+  r({
+    id: "elk-ridge",
+    county: "utah",
+    city: "Elk Ridge",
+    ruleStatus: "manual-review",
+    sourceLabel: "Elk Ridge Water Conservation Plan (PDF)",
+    sourceUrl: "https://www.elkridgecity.org/",
+    maxDaysPerWeek: 3,
+    generalAllowedDays: MWF,
+    restrictionText:
+      "No current live restriction page verified. Conservation plan has drought-response framework, but not live current rules.",
+    recommendationText: "Refer to Elk Ridge water conservation plan for drought stages.",
+  }),
+  stateFallback(
+    "woodland-hills",
+    "Woodland Hills",
+    "utah",
+    "Utah Weekly Lawn Watering Guide",
+    UTAH_WEEKLY_LAWN_GUIDE_URL,
+    "No current city-specific restriction verified. Use state guide fallback.",
+  ),
+  stateFallback(
+    "genola",
+    "Genola",
+    "utah",
+    "Utah Weekly Lawn Watering Guide",
+    UTAH_WEEKLY_LAWN_GUIDE_URL,
+    "No current city-specific restriction verified. Use state guide fallback.",
+  ),
+  stateFallback(
+    "goshen",
+    "Goshen",
+    "utah",
+    "Utah Weekly Lawn Watering Guide",
+    UTAH_WEEKLY_LAWN_GUIDE_URL,
+    "No current city-specific restriction verified. Use state guide fallback.",
+  ),
+  // Salt Lake County
+  r({
+    id: "salt-lake-city",
+    county: "salt-lake",
+    city: "Salt Lake City",
+    ruleStatus: "provider-aware",
+    sourceLabel: "SLC Drought Information",
+    sourceUrl: "https://www.slc.gov/utilities/water/conservation/drought/",
+    maxDaysPerWeek: 3,
+    subtractOneDayFromNormal: true,
+    noWateringStart: NO_10,
+    noWateringEnd: NO_18,
+    generalAllowedDays: MWF,
+    restrictionText:
+      "Stage 2 Water Shortage Advisory. Voluntary indoor/outdoor reductions requested; target reduction of 10 million gallons/day across service area.",
+    recommendationText: "Water one day less than normal this week when possible.",
+  }),
+  r({
+    id: "west-valley-city",
+    county: "salt-lake",
+    city: "West Valley City",
+    ruleStatus: "provider-lookup",
+    requiresProviderLookup: true,
+    sourceLabel: "GHID Water Conservation",
+    sourceUrl: "https://www.ghid.gov/conservation",
+    maxDaysPerWeek: 3,
+    generalAllowedDays: MWF,
+    providerNote:
+      "Large areas served by Granger-Hunter Improvement District. GHID selected Drought Level II on April 21, 2026; voluntary conservation measures apply.",
+    restrictionText:
+      "Provider lookup required. GHID Drought Level II voluntary conservation in large areas.",
+    recommendationText: "Confirm whether your address is GHID or another provider.",
+  }),
+  r({
+    id: "west-jordan",
+    county: "salt-lake",
+    city: "West Jordan",
+    ruleStatus: "provider-lookup",
+    requiresProviderLookup: true,
+    sourceLabel: "West Jordan Council Corner (April 2026)",
+    sourceUrl: "https://www.westjordan.utah.gov/",
+    maxDaysPerWeek: 3,
+    noWateringBeforeDate: "May 15",
+    generalAllowedDays: MWF,
+    providerNote: "Use your water provider schedule plus the state weekly guide.",
+    restrictionText:
+      "No strict citywide schedule verified. City asked residents to delay outdoor watering until May 15.",
+    recommendationText: "Delay outdoor watering until May 15 where applicable.",
+  }),
+  r({
+    id: "south-jordan",
+    county: "salt-lake",
+    city: "South Jordan",
+    ruleStatus: "auto-update",
+    sourceLabel: "South Jordan Water Smart SoJo",
+    sourceUrl: "https://www.sjc.utah.gov/300/Water-Smart-SoJo",
+    maxDaysPerWeek: 1,
+    oncePerWeekCap: true,
+    noWateringBeforeDate: "May 15",
+    noWateringStart: NO_10,
+    noWateringEnd: NO_18,
+    generalAllowedDays: ["saturday"],
+    restrictionText:
+      "Level 2 water availability response: do not water until May 15, then water only once per week; 10% reduction goal.",
+    recommendationText: "After May 15, limit to one watering day per week.",
+  }),
+  r({
+    id: "sandy",
+    county: "salt-lake",
+    city: "Sandy",
+    ruleStatus: "auto-update",
+    sourceLabel: "Sandy Drought Information",
+    sourceUrl: "https://www.sandy.utah.gov/793/Drought-Information",
+    maxDaysPerWeek: 3,
+    generalAllowedDays: MWF,
+    noWateringStart: NO_10,
+    noWateringEnd: NO_18,
+    restrictionText:
+      "Permanent ordinance restricts outdoor watering between 10 AM and 6 PM, except landscape establishment and repairs.",
+    recommendationText:
+      "Exceptions for new landscape establishment and repairs per city ordinance.",
+  }),
+  r({
+    id: "draper",
+    county: "salt-lake",
+    city: "Draper",
+    ruleStatus: "auto-update",
+    sourceLabel: "Draper Reduction in Water Use Needed",
+    sourceUrl: "https://www.draperutah.gov/999/Reduction-in-Water-Use-Needed",
+    maxDaysPerWeek: 3,
+    generalAllowedDays: MWF,
+    restrictionText:
+      "Commercial properties must water only between 6 PM and 10 AM. No current restricted residential hours; conservation is encouraged.",
+    recommendationText:
+      "Residential: follow state guide. Commercial: water only 6 PM–10 AM.",
+  }),
+  r({
+    id: "herriman",
+    county: "salt-lake",
+    city: "Herriman",
+    ruleStatus: "provider-lookup",
+    requiresProviderLookup: true,
+    sourceLabel: "Herriman Water Conservation",
+    sourceUrl: "https://www.herriman.gov/departments/water-conservation",
+    maxDaysPerWeek: 3,
+    generalAllowedDays: MWF,
+    providerNote: "Identify your water provider before setting watering days.",
+    restrictionText:
+      "No strict citywide watering schedule verified. Use provider lookup and state/JVWCD guide.",
+    recommendationText: "Use state guide until provider rules are confirmed.",
+  }),
+  r({
+    id: "riverton",
+    county: "salt-lake",
+    city: "Riverton",
+    ruleStatus: "recommendation-only",
+    sourceLabel: "Riverton Secondary Water",
+    sourceUrl:
+      "https://www.rivertonutah.gov/departments/public-services/secondary-water",
+    maxDaysPerWeek: 3,
+    generalAllowedDays: MWF,
+    restrictionText:
+      "No current water restrictions. City encourages reducing sprinkler system output by 10–20%.",
+    recommendationText: "Voluntary: reduce sprinkler system output by 10–20%.",
+  }),
+  r({
+    id: "bluffdale",
+    county: "salt-lake",
+    city: "Bluffdale",
+    ruleStatus: "provider-lookup",
+    requiresProviderLookup: true,
+    sourceLabel: "Bluffdale Water Conservation",
+    sourceUrl: "https://www.bluffdale.com/departments/public-works/water-conservation",
+    maxDaysPerWeek: 3,
+    generalAllowedDays: MWF,
+    providerNote: "Confirm provider (Jordan Valley, culinary district, etc.).",
+    restrictionText:
+      "No strict current watering schedule verified. Use provider lookup and state/JVWCD guide.",
+    recommendationText: "Use state guide until provider rules are confirmed.",
+  }),
+  r({
+    id: "midvale",
+    county: "salt-lake",
+    city: "Midvale",
+    ruleStatus: "auto-update",
+    sourceLabel: "Midvale Drought Response",
+    sourceUrl:
+      "https://www.midvalecity.org/departments/public-works/water/drought-response",
+    maxDaysPerWeek: 2,
+    noWateringBeforeDate: "May 15",
+    noWateringStart: NO_10,
+    noWateringEnd: NO_18,
+    generalAllowedDays: ["monday", "thursday"],
+    restrictionText:
+      "Not enforcing mandatory restrictions right now, but strongly encourages reduced use; delay watering until May 15 and no more than 2 days/week. Drought surcharge active.",
+    recommendationText:
+      "Strong recommendation: after May 15, water no more than 2 days per week.",
+  }),
+  r({
+    id: "murray",
+    county: "salt-lake",
+    city: "Murray",
+    ruleStatus: "provider-aware",
+    sourceLabel: "Murray Water Conservation",
+    sourceUrl: "https://www.murray.utah.gov/257/Water-Conservation",
+    maxDaysPerWeek: 3,
+    generalAllowedDays: MWF,
+    noWateringStart: NO_10,
+    noWateringEnd: NO_18,
+    providerNote:
+      "Some areas may also fall under SLC Public Utilities — SLC Stage 2 may apply.",
+    restrictionText:
+      "Prior official source: no pressurized landscape irrigation between 10 AM and 6 PM.",
+    recommendationText: "Water outside 10 AM–6 PM. Confirm if SLC utilities serves your address.",
+  }),
+  r({
+    id: "taylorsville",
+    county: "salt-lake",
+    city: "Taylorsville",
+    ruleStatus: "provider-lookup",
+    requiresProviderLookup: true,
+    sourceLabel: "Taylorsville-Bennion Improvement District",
+    sourceUrl: "https://www.tbid.org/",
+    maxDaysPerWeek: 3,
+    generalAllowedDays: MWF,
+    providerNote: "TBID serves much of Taylorsville — verify your district.",
+    restrictionText:
+      "No strict citywide schedule verified. Check TBID and state guide.",
+    recommendationText: "Use state guide until provider rules are confirmed.",
+  }),
+  r({
+    id: "holladay",
+    county: "salt-lake",
+    city: "Holladay",
+    ruleStatus: "provider-lookup",
+    requiresProviderLookup: true,
+    sourceLabel: "Holliday Water Company",
+    sourceUrl: "https://www.hollidaywater.com/",
+    maxDaysPerWeek: 3,
+    generalAllowedDays: MWF,
+    providerNote:
+      "Provider-specific. SLC Public Utilities and Holliday Water Company serve parts of the area.",
+    restrictionText: "Provider-specific watering rules may apply by address.",
+    recommendationText: "Identify your provider before finalizing watering days.",
+  }),
+  r({
+    id: "cottonwood-heights",
+    county: "salt-lake",
+    city: "Cottonwood Heights",
+    ruleStatus: "provider-lookup",
+    requiresProviderLookup: true,
+    sourceLabel: "SLC Public Utilities Service Area",
+    sourceUrl: "https://www.slc.gov/utilities/water/",
+    maxDaysPerWeek: 3,
+    generalAllowedDays: MWF,
+    providerNote:
+      "SLC Public Utilities serves portions — SLC Stage 2 may apply depending on address.",
+    restrictionText: "Provider-specific. SLC Stage 2 may apply for SLC Public Utilities customers.",
+    recommendationText: "If served by SLC Public Utilities, follow SLC Stage 2 drought guidance.",
+  }),
+  r({
+    id: "millcreek",
+    county: "salt-lake",
+    city: "Millcreek",
+    ruleStatus: "provider-lookup",
+    requiresProviderLookup: true,
+    sourceLabel: "SLC Public Utilities Service Area",
+    sourceUrl: "https://www.slc.gov/utilities/water/",
+    maxDaysPerWeek: 3,
+    generalAllowedDays: MWF,
+    providerNote:
+      "SLC Public Utilities serves portions — SLC Stage 2 may apply depending on address.",
+    restrictionText: "Provider-specific. SLC Stage 2 may apply for SLC Public Utilities customers.",
+    recommendationText: "If served by SLC Public Utilities, follow SLC Stage 2 drought guidance.",
+  }),
+  r({
+    id: "south-salt-lake",
+    county: "salt-lake",
+    city: "South Salt Lake",
+    ruleStatus: "provider-aware",
+    sourceLabel: "South Salt Lake Water Conservation",
+    sourceUrl:
+      "https://www.southsaltlakecity.com/sslc/page/water-conservation",
+    maxDaysPerWeek: 1,
+    oncePerWeekCap: true,
+    noWateringBeforeDate: "May 15",
+    noWateringStart: NO_10,
+    noWateringEnd: NO_18,
+    generalAllowedDays: ["wednesday"],
+    restrictionText:
+      "JVWCD Level 2 guidance: delay watering until May 15, then once per week.",
+    recommendationText: "After May 15, one watering day per week.",
+  }),
+  r({
+    id: "magna",
+    county: "salt-lake",
+    city: "Magna",
+    ruleStatus: "provider-lookup",
+    requiresProviderLookup: true,
+    sourceLabel: "Magna Water Conservation & Drought Info",
+    sourceUrl: "https://www.magnawater.org/",
+    maxDaysPerWeek: 3,
+    generalAllowedDays: MWF,
+    providerNote: "Magna Water District serves most of Magna township.",
+    restrictionText:
+      "No strict current watering schedule verified. Use Magna Water District and state guide.",
+    recommendationText: "Use state guide until provider rules are confirmed.",
+  }),
+  stateFallback(
+    "kearns",
+    "Kearns",
+    "salt-lake",
+    "Kearns Improvement District Watering Guide",
+    "https://www.kearnsid.org/",
+    "No strict district-specific schedule verified. Kearns Improvement District points users toward the Utah Weekly Lawn Watering Guide.",
+  ),
+  r({
+    id: "white-city",
+    county: "salt-lake",
+    city: "White City",
+    ruleStatus: "provider-lookup",
+    requiresProviderLookup: true,
+    sourceLabel: "Salt Lake County Water Restrictions Resource",
+    sourceUrl: SALT_LAKE_COUNTY_RESTRICTIONS_URL,
+    maxDaysPerWeek: 3,
+    generalAllowedDays: MWF,
+    providerNote: "Use county resource to find your water provider.",
+    restrictionText:
+      "No city-specific restriction verified. Use Salt Lake County utility/provider lookup.",
+    recommendationText: "Use state guide until provider rules are confirmed.",
+  }),
+  r({
+    id: "copperton",
+    county: "salt-lake",
+    city: "Copperton",
+    ruleStatus: "provider-lookup",
+    requiresProviderLookup: true,
+    sourceLabel: "Salt Lake County Water Restrictions Resource",
+    sourceUrl: SALT_LAKE_COUNTY_RESTRICTIONS_URL,
+    maxDaysPerWeek: 3,
+    generalAllowedDays: MWF,
+    providerNote: "Use county resource to find your water provider.",
+    restrictionText:
+      "No city-specific restriction verified. Use Salt Lake County utility/provider lookup.",
+    recommendationText: "Use state guide until provider rules are confirmed.",
+  }),
+];
+
+export function getCityRule(cityId: string): CityWateringRule | undefined {
+  return cityWateringRules.find((c) => c.id === cityId);
+}
+
+export function getCitiesByCounty(county: County): CityWateringRule[] {
+  return cityWateringRules.filter((c) => c.county === county);
+}
+
+export const weekdayLabels: Record<Weekday, string> = {
+  monday: "Monday",
+  tuesday: "Tuesday",
+  wednesday: "Wednesday",
+  thursday: "Thursday",
+  friday: "Friday",
+  saturday: "Saturday",
+  sunday: "Sunday",
+};

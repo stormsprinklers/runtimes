@@ -17,9 +17,9 @@ const body = Source_Sans_3({
 });
 
 export const metadata: Metadata = {
-  title: "Sprinkler Runtime Calculator | Storm Sprinklers Utah",
+  title: "Storm Sprinklers Utah | Sprinkler Repair & Watering Tools",
   description:
-    "Free sprinkler program calculator for Utah homeowners. Get zone runtimes based on your city watering rules, drought restrictions, soil, slope, shade, and vegetation.",
+    "Utah sprinkler repair, installation, and free watering run time calculators for Utah County and Salt Lake County homeowners.",
   icons: {
     icon: "/icon.png",
     apple: "/icon.png",
