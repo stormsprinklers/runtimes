@@ -96,17 +96,6 @@ export function WateringScheduleResults({
         </div>
       )}
 
-      <div
-        className="rounded-xl border-l-4 p-4 text-sm text-[var(--color-navy)]"
-        style={{
-          borderColor: "var(--color-pink)",
-          background: "color-mix(in srgb, var(--color-pink) 10%, white)",
-        }}
-      >
-        <h3 className="font-display text-lg">How start times work</h3>
-        <p className="mt-2">{result.startTimeMistakeNote}</p>
-      </div>
-
       {(result.warnings.length > 0 || result.notes.length > 0) && (
         <div className="rounded-xl bg-[var(--color-light-blue)]/40 p-5">
           <h3 className="font-display text-lg text-[var(--color-navy)]">

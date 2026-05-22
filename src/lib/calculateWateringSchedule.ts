@@ -358,6 +358,7 @@ export function buildProgramTimeline(
 ): TimelineEntry[] {
   const entries: TimelineEntry[] = [];
   const startTimes = program.startTimes;
+  const runsOnly = program.usesCycleSoak;
 
   startTimes.forEach((startTime, cycleIndex) => {
     let cursor = parseTimeToMinutes(startTime);
@@ -370,21 +371,13 @@ export function buildProgramTimeline(
         label: `${station.name} runs ${station.minutesPerCycle} min${cycleLabel}`,
       });
       cursor += station.minutesPerCycle;
-      if (idx < program.stations.length - 1) {
+      if (!runsOnly && idx < program.stations.length - 1) {
         entries.push({
           time: formatMinutesToTime(cursor),
           label: `Next station starts`,
         });
       }
     });
-
-    if (cycleIndex < startTimes.length - 1 && program.stations.length > 0) {
-      const soak = program.stations[0]?.soakMinutes ?? 30;
-      entries.push({
-        time: formatMinutesToTime(cursor),
-        label: `Soak ~${soak} min before next cycle`,
-      });
-    }
   });
 
   return entries;
