@@ -3,20 +3,21 @@
 import { useMemo, useState } from "react";
 import { MONTH_LABELS } from "@/data/seasonalWateringDays";
 import { getCitiesByCounty } from "@/data/wateringRestrictions";
-import { calculateWateringSchedule } from "@/lib/calculateWateringSchedule";
+import {
+  calculateControllerSchedule,
+  createDefaultStation,
+} from "@/lib/calculateWateringSchedule";
 import type {
   AddressParity,
+  ControllerCalculatorResult,
   County,
-  LawnType,
-  Slope,
-  SoilType,
-  SprinklerType,
-  SunExposure,
-  WateringCalculatorResult,
+  StationInput,
 } from "@/types/watering-calculator";
 import { CityRestrictionPanel } from "./CityRestrictionPanel";
+import { StationCard } from "./StationCard";
 import { WateringScheduleResults } from "./WateringScheduleResults";
 
+const MAX_STATIONS = 8;
 const selectClass =
   "mt-1 w-full rounded-lg border border-[var(--color-light-blue)] bg-white px-3 py-2.5 text-[var(--color-navy)]";
 
@@ -25,13 +26,14 @@ export function WateringCalculatorForm() {
   const [county, setCounty] = useState<County>("utah");
   const [cityId, setCityId] = useState("provo");
   const [addressParity, setAddressParity] = useState<AddressParity>("unknown");
-  const [sprinklerType, setSprinklerType] = useState<SprinklerType>("spray");
-  const [lawnType, setLawnType] = useState<LawnType>("established-lawn");
-  const [sunExposure, setSunExposure] = useState<SunExposure>("full-sun");
-  const [soilType, setSoilType] = useState<SoilType>("loam");
-  const [slope, setSlope] = useState<Slope>("flat");
   const [month, setMonth] = useState(defaultMonth);
-  const [result, setResult] = useState<WateringCalculatorResult | null>(null);
+  const [stations, setStations] = useState<StationInput[]>([
+    createDefaultStation(0),
+    createDefaultStation(1),
+  ]);
+  const [result, setResult] = useState<ControllerCalculatorResult | null>(
+    null,
+  );
 
   const cities = useMemo(() => getCitiesByCounty(county), [county]);
 
@@ -47,18 +49,32 @@ export function WateringCalculatorForm() {
     setResult(null);
   }
 
+  function updateStation(id: string, patch: Partial<StationInput>) {
+    setStations((prev) =>
+      prev.map((s) => (s.id === id ? { ...s, ...patch } : s)),
+    );
+  }
+
+  function addStation() {
+    if (stations.length >= MAX_STATIONS) return;
+    setStations((prev) => [...prev, createDefaultStation(prev.length)]);
+  }
+
+  function removeStation(id: string) {
+    if (stations.length <= 1) return;
+    setStations((prev) => prev.filter((s) => s.id !== id));
+  }
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const computed = calculateWateringSchedule({
-      county,
-      cityId,
-      addressParity,
-      sprinklerType,
-      lawnType,
-      sunExposure,
-      soilType,
-      slope,
-      month,
+    const computed = calculateControllerSchedule({
+      site: {
+        county,
+        cityId,
+        addressParity,
+        month,
+      },
+      stations,
     });
     setResult(computed);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -78,8 +94,12 @@ export function WateringCalculatorForm() {
       <div className="rounded-2xl border border-[var(--color-light-blue)] bg-white p-6 shadow-sm sm:p-8">
         <fieldset className="space-y-5">
           <legend className="font-display text-lg text-[var(--color-navy)]">
-            Location
+            Your property
           </legend>
+          <p className="text-sm text-[var(--color-navy)]/70">
+            City rules apply to your whole system. Stations below get their own
+            runtimes and are grouped into programs automatically.
+          </p>
 
           <label className="block">
             <span className="text-sm font-semibold text-[var(--color-navy)]">
@@ -135,115 +155,56 @@ export function WateringCalculatorForm() {
               </select>
             </label>
           )}
+
+          <label className="block">
+            <span className="text-sm font-semibold text-[var(--color-navy)]">
+              Month / season
+            </span>
+            <select
+              value={month}
+              onChange={(e) => setMonth(Number(e.target.value))}
+              className={selectClass}
+            >
+              {MONTH_LABELS.map((label, i) => (
+                <option key={label} value={i}>
+                  {label}
+                  {i === defaultMonth ? " (current)" : ""}
+                </option>
+              ))}
+            </select>
+          </label>
         </fieldset>
 
-        <fieldset className="mt-8 space-y-5 border-t border-[var(--color-light-blue)] pt-8">
-          <legend className="font-display text-lg text-[var(--color-navy)]">
-            System &amp; landscape
-          </legend>
-
-          <label className="block">
-            <span className="text-sm font-semibold text-[var(--color-navy)]">
-              Sprinkler type
-            </span>
-            <select
-              value={sprinklerType}
-              onChange={(e) =>
-                setSprinklerType(e.target.value as SprinklerType)
-              }
-              className={selectClass}
+        <fieldset className="mt-8 space-y-4 border-t border-[var(--color-light-blue)] pt-8">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <legend className="font-display text-lg text-[var(--color-navy)]">
+              Your stations
+            </legend>
+            <button
+              type="button"
+              onClick={addStation}
+              disabled={stations.length >= MAX_STATIONS}
+              className="rounded-full bg-[var(--color-medium-blue)] px-4 py-2 text-sm font-bold text-white disabled:opacity-40"
             >
-              <option value="spray">Spray heads</option>
-              <option value="rotor">Rotors</option>
-              <option value="mp-rotator">MP Rotators</option>
-              <option value="drip">Drip irrigation</option>
-              <option value="bubbler">Bubblers</option>
-            </select>
-          </label>
+              + Add station
+            </button>
+          </div>
+          <p className="text-sm text-[var(--color-navy)]/70">
+            One row per controller station (valve). Programs A, B, and C are
+            assigned by landscape type — lawn, drip/shrubs, or new sod/seed.
+          </p>
 
-          <label className="block">
-            <span className="text-sm font-semibold text-[var(--color-navy)]">
-              Lawn / landscape type
-            </span>
-            <select
-              value={lawnType}
-              onChange={(e) => setLawnType(e.target.value as LawnType)}
-              className={selectClass}
-            >
-              <option value="established-lawn">Established lawn</option>
-              <option value="new-sod">New sod</option>
-              <option value="new-seed">New seed</option>
-              <option value="trees-shrubs">Trees / shrubs</option>
-              <option value="garden-beds">Garden beds</option>
-            </select>
-          </label>
-
-          <div className="grid gap-5 sm:grid-cols-2">
-            <label className="block">
-              <span className="text-sm font-semibold text-[var(--color-navy)]">
-                Sun exposure
-              </span>
-              <select
-                value={sunExposure}
-                onChange={(e) =>
-                  setSunExposure(e.target.value as SunExposure)
-                }
-                className={selectClass}
-              >
-                <option value="full-sun">Full sun</option>
-                <option value="mixed">Mixed sun / shade</option>
-                <option value="mostly-shade">Mostly shade</option>
-              </select>
-            </label>
-
-            <label className="block">
-              <span className="text-sm font-semibold text-[var(--color-navy)]">
-                Soil type
-              </span>
-              <select
-                value={soilType}
-                onChange={(e) => setSoilType(e.target.value as SoilType)}
-                className={selectClass}
-              >
-                <option value="clay">Clay</option>
-                <option value="loam">Loam</option>
-                <option value="sandy">Sandy</option>
-                <option value="unknown">Unknown</option>
-              </select>
-            </label>
-
-            <label className="block">
-              <span className="text-sm font-semibold text-[var(--color-navy)]">
-                Slope
-              </span>
-              <select
-                value={slope}
-                onChange={(e) => setSlope(e.target.value as Slope)}
-                className={selectClass}
-              >
-                <option value="flat">Flat</option>
-                <option value="moderate">Moderate slope</option>
-                <option value="steep">Steep slope</option>
-              </select>
-            </label>
-
-            <label className="block">
-              <span className="text-sm font-semibold text-[var(--color-navy)]">
-                Month / season
-              </span>
-              <select
-                value={month}
-                onChange={(e) => setMonth(Number(e.target.value))}
-                className={selectClass}
-              >
-                {MONTH_LABELS.map((label, i) => (
-                  <option key={label} value={i}>
-                    {label}
-                    {i === defaultMonth ? " (current)" : ""}
-                  </option>
-                ))}
-              </select>
-            </label>
+          <div className="space-y-4">
+            {stations.map((station, index) => (
+              <StationCard
+                key={station.id}
+                station={station}
+                index={index}
+                canRemove={stations.length > 1}
+                onChange={(patch) => updateStation(station.id, patch)}
+                onRemove={() => removeStation(station.id)}
+              />
+            ))}
           </div>
         </fieldset>
 
@@ -252,7 +213,7 @@ export function WateringCalculatorForm() {
           className="mt-8 w-full rounded-full py-3.5 text-base font-bold text-white sm:w-auto sm:px-10"
           style={{ background: "var(--color-pink)" }}
         >
-          Calculate Schedule
+          Calculate Controller Program
         </button>
       </div>
     </form>
